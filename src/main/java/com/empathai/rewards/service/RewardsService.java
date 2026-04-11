@@ -8,35 +8,22 @@ import java.util.List;
 
 public interface RewardsService {
 
-    // ── Badges (admin CRUD) ───────────────────────────────────────────────
+    // ── Badges ────────────────────────────────────────────────────────────
     List<BadgeResponse> getAllBadges();
-    BadgeResponse createBadge(String title, String triggerType, String triggerTitle,
-                              String triggerValue, MultipartFile image);
-    BadgeResponse updateBadge(Long id, String title, String triggerType, String triggerTitle,
-                              String triggerValue, MultipartFile image);
+    BadgeResponse createBadge(String title, String triggerType, String triggerTitle, MultipartFile image);
+    BadgeResponse updateBadge(Long id, String title, String triggerType, String triggerTitle, MultipartFile image);
     void deleteBadge(Long id);
 
-    // ── Student badges ────────────────────────────────────────────────────
-
-    /**
-     * Returns all badges earned by the given student, each carrying an
-     * {@code earnedAt} timestamp and the badge's {@code triggerValue}.
-     */
+    // ── Student Badges ────────────────────────────────────────────────────
     List<BadgeResponse> getStudentBadges(Long studentId);
 
-    /**
-     * Auto-awards any login-milestone badges the student has not yet earned
-     * based on their current {@code loginCount}.
-     * Called immediately after {@code loginCount} is incremented.
-     */
-    void checkAndAwardLoginBadges(Long studentId, int newLoginCount);
+    // ── Badge Award Triggers ──────────────────────────────────────────────
+    // Called by AuthService after each login to check & award login-milestone badges.
+    void checkAndAwardLoginBadges(Long studentId, int totalLogins);
 
-    /**
-     * Auto-awards any intervention-milestone badges the student has not yet
-     * earned based on their current {@code interventionSessionCount}.
-     * Called immediately after {@code interventionSessionCount} is incremented.
-     */
-    void checkAndAwardInterventionBadges(Long studentId, int newSessionCount);
+    // Called by InterventionController after each session to check & award
+    // intervention-milestone badges.
+    void checkAndAwardInterventionBadges(Long studentId, int totalInterventions);
 
     // ── Achievements ──────────────────────────────────────────────────────
     List<AchievementResponse> getAllAchievements();

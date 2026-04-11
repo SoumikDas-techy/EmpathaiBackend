@@ -11,10 +11,7 @@ public class BadgeResponse {
     private String imageType;
     private String triggerType;
     private String triggerTitle;
-    private String triggerValue;  // milestone number for login/intervention badges
-    private String description;
-    /** Populated only when returning a student's earned badge (GET /students/{id}/badges). */
-    private LocalDateTime earnedAt;
     private LocalDateTime createdAt;
     private LocalDateTime modifiedAt;
+    private LocalDateTime earnedAt; // FIX: populated when fetching student badges
 }
