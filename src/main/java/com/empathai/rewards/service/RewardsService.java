@@ -8,11 +8,35 @@ import java.util.List;
 
 public interface RewardsService {
 
-    // ── Badges ────────────────────────────────────────────────────────────
+    // ── Badges (admin CRUD) ───────────────────────────────────────────────
     List<BadgeResponse> getAllBadges();
-    BadgeResponse createBadge(String title, String triggerType, String triggerTitle, MultipartFile image);
-    BadgeResponse updateBadge(Long id, String title, String triggerType, String triggerTitle, MultipartFile image);
+    BadgeResponse createBadge(String title, String triggerType, String triggerTitle,
+                              String triggerValue, MultipartFile image);
+    BadgeResponse updateBadge(Long id, String title, String triggerType, String triggerTitle,
+                              String triggerValue, MultipartFile image);
     void deleteBadge(Long id);
+
+    // ── Student badges ────────────────────────────────────────────────────
+
+    /**
+     * Returns all badges earned by the given student, each carrying an
+     * {@code earnedAt} timestamp and the badge's {@code triggerValue}.
+     */
+    List<BadgeResponse> getStudentBadges(Long studentId);
+
+    /**
+     * Auto-awards any login-milestone badges the student has not yet earned
+     * based on their current {@code loginCount}.
+     * Called immediately after {@code loginCount} is incremented.
+     */
+    void checkAndAwardLoginBadges(Long studentId, int newLoginCount);
+
+    /**
+     * Auto-awards any intervention-milestone badges the student has not yet
+     * earned based on their current {@code interventionSessionCount}.
+     * Called immediately after {@code interventionSessionCount} is incremented.
+     */
+    void checkAndAwardInterventionBadges(Long studentId, int newSessionCount);
 
     // ── Achievements ──────────────────────────────────────────────────────
     List<AchievementResponse> getAllAchievements();

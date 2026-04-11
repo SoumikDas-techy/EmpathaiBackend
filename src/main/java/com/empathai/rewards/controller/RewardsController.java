@@ -20,7 +20,7 @@ public class RewardsController {
     private final RewardsService rewardsService;
 
     // ══════════════════════════════════════════════════════════════════════
-    // BADGES
+    // BADGES — Admin CRUD
     // ══════════════════════════════════════════════════════════════════════
 
     @GetMapping("/badges")
@@ -32,23 +32,26 @@ public class RewardsController {
     @PostMapping("/badges")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<BadgeResponse> createBadge(
-            @RequestParam("title") String title,
-            @RequestParam("triggerType") String triggerType,
+            @RequestParam("title")        String title,
+            @RequestParam("triggerType")  String triggerType,
             @RequestParam("triggerTitle") String triggerTitle,
+            @RequestParam(value = "triggerValue", required = false) String triggerValue,
             @RequestParam(value = "image", required = false) MultipartFile image) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(rewardsService.createBadge(title, triggerType, triggerTitle, image));
+                .body(rewardsService.createBadge(title, triggerType, triggerTitle, triggerValue, image));
     }
 
     @PutMapping("/badges/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<BadgeResponse> updateBadge(
             @PathVariable Long id,
-            @RequestParam("title") String title,
-            @RequestParam("triggerType") String triggerType,
+            @RequestParam("title")        String title,
+            @RequestParam("triggerType")  String triggerType,
             @RequestParam("triggerTitle") String triggerTitle,
+            @RequestParam(value = "triggerValue", required = false) String triggerValue,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.ok(rewardsService.updateBadge(id, title, triggerType, triggerTitle, image));
+        return ResponseEntity.ok(
+                rewardsService.updateBadge(id, title, triggerType, triggerTitle, triggerValue, image));
     }
 
     @DeleteMapping("/badges/{id}")
@@ -59,7 +62,26 @@ public class RewardsController {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // ACHIEVEMENTS
+    // STUDENT BADGES — Read
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * GET /api/rewards/students/{studentId}/badges
+     *
+     * Returns all badges the student has earned.
+     * Each item includes: id, title, imageBase64, imageType, triggerType,
+     * triggerTitle, triggerValue, earnedAt.
+     *
+     * Called by the frontend Dashboard BadgesModal via fetchStudentBadges(studentId).
+     */
+    @GetMapping("/students/{studentId}/badges")
+    @PreAuthorize("hasAnyRole('STUDENT','SCHOOL_ADMIN','PSYCHOLOGIST','SUPER_ADMIN')")
+    public ResponseEntity<List<BadgeResponse>> getStudentBadges(@PathVariable Long studentId) {
+        return ResponseEntity.ok(rewardsService.getStudentBadges(studentId));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ACHIEVEMENTS — Admin CRUD
     // ══════════════════════════════════════════════════════════════════════
 
     @GetMapping("/achievements")
@@ -71,7 +93,7 @@ public class RewardsController {
     @PostMapping("/achievements")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AchievementResponse> createAchievement(
-            @RequestParam("title") String title,
+            @RequestParam("title")       String title,
             @RequestParam("description") String description,
             @RequestParam(value = "image", required = false) MultipartFile image) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -82,7 +104,7 @@ public class RewardsController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AchievementResponse> updateAchievement(
             @PathVariable Long id,
-            @RequestParam("title") String title,
+            @RequestParam("title")       String title,
             @RequestParam("description") String description,
             @RequestParam(value = "image", required = false) MultipartFile image) {
         return ResponseEntity.ok(rewardsService.updateAchievement(id, title, description, image));

@@ -8,5 +8,7 @@ import java.util.List;
 
 @Repository
 public interface BadgeRepository extends JpaRepository<Badge, Long> {
-    List<Badge> findByTriggerTypeAndTriggerTitle(String triggerType, String triggerTitle);
+
+    /** Used by the auto-award logic to find all badges for a given trigger type. */
+    List<Badge> findByTriggerType(String triggerType);
 }

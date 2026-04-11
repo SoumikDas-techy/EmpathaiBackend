@@ -24,8 +24,6 @@ public class Student extends User {
     @Column(name = "section")
     private String section;
 
-
-
     @Column(name = "phone_number")
     private String phoneNumber;
 
@@ -47,10 +45,19 @@ public class Student extends User {
     @Column(name = "parent_name")
     private String parentName;
 
+    // ── New fields ─────────────────────────────────────────────────────────
 
+    /** Incremented every time this student successfully logs in. */
+    @Column(name = "login_count", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer loginCount = 0;
+
+    /** Incremented every time this student completes an intervention/counseling session. */
+    @Column(name = "intervention_session_count", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer interventionSessionCount = 0;
+
+    // ── Constructor ────────────────────────────────────────────────────────
 
     public Student(String email, String password, String name) {
         super(email, password, name, UserRole.STUDENT);
     }
 }
-//need to store phone no.
