@@ -20,7 +20,7 @@ public class RewardsController {
     private final RewardsService rewardsService;
 
     // ══════════════════════════════════════════════════════════════════════
-    // BADGES
+    // BADGES  (admin-only CRUD)
     // ══════════════════════════════════════════════════════════════════════
 
     @GetMapping("/badges")
@@ -59,19 +59,21 @@ public class RewardsController {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // STUDENT BADGES  ← FIX: This endpoint was completely missing
-    // The frontend calls GET /api/rewards/students/{studentId}/badges
-    // but no such route existed → Spring returned 403.
+    // STUDENT BADGES
+    // GET /api/rewards/students/{studentId}/badges
+    // Accessible by the student themselves and all staff roles.
+    // Previously this endpoint was missing entirely, which caused Spring
+    // Security to return HTTP 403 for any authenticated STUDENT request.
     // ══════════════════════════════════════════════════════════════════════
 
     @GetMapping("/students/{studentId}/badges")
-    @PreAuthorize("hasAnyRole('STUDENT', 'SUPER_ADMIN', 'SCHOOL_ADMIN', 'PSYCHOLOGIST')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'SUPER_ADMIN', 'SCHOOL_ADMIN', 'PSYCHOLOGIST', 'CONTENT_ADMIN')")
     public ResponseEntity<List<BadgeResponse>> getStudentBadges(@PathVariable Long studentId) {
         return ResponseEntity.ok(rewardsService.getStudentBadges(studentId));
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // ACHIEVEMENTS
+    // ACHIEVEMENTS  (admin-only CRUD)
     // ══════════════════════════════════════════════════════════════════════
 
     @GetMapping("/achievements")
