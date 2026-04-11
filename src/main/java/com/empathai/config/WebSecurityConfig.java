@@ -33,7 +33,6 @@ public class WebSecurityConfig {
     private String allowedOrigins;
 
     @Bean
-
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -54,6 +53,9 @@ public class WebSecurityConfig {
                         .hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/questions/**").authenticated()
 
+                        // ── Teachers: accessible only by SUPER_ADMIN and SCHOOL_ADMIN ──
+                        .requestMatchers("/api/teachers/**").hasAnyRole("SUPER_ADMIN", "SCHOOL_ADMIN")
+
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)
@@ -65,7 +67,6 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // allowedOriginPatterns supports credentials + wildcard sub-domains if needed
         configuration.setAllowedOriginPatterns(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
@@ -73,6 +74,5 @@ public class WebSecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
-
     }
 }

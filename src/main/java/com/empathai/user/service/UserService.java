@@ -51,6 +51,8 @@ public class UserService {
                     .dateOfBirth(request.getDateOfBirth())
                     .parentName(request.getParentName())
                     .address(request.getAddress())
+                    .age(request.getAge())
+                    .gender(request.getGender())
                     .build();
         }
 

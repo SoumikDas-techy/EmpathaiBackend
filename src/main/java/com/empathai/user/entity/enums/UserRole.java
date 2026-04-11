@@ -5,5 +5,6 @@ public enum UserRole {
     CONTENT_ADMIN,
     SCHOOL_ADMIN,
     PSYCHOLOGIST,
-    STUDENT
+    STUDENT,
+    TEACHER
 }

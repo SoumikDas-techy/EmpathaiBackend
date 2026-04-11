@@ -12,7 +12,7 @@ public class ResponseRequest {
     private Long questionId;
     private String questionText;
     private String responseValue;
-    private String answer;        // ← frontend sends this
+    private String answer;
     private String emotion;
     private String groupId;
     private String groupName;
