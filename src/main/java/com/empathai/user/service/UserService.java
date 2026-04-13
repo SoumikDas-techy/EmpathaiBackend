@@ -1,5 +1,6 @@
 package com.empathai.user.service;
 
+import com.empathai.rewards.service.RewardsService;
 import com.empathai.user.dto.user.*;
 import com.empathai.user.entity.*;
 import com.empathai.user.entity.enums.UserRole;
@@ -26,6 +27,7 @@ public class UserService {
     private final StudentRepository studentRepository;
     private final SchoolRepository schoolRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RewardsService rewardsService;
 
     // ─────────────────────────────────────────────────────────────
     // CREATE / UPDATE / DELETE
@@ -158,10 +160,6 @@ public class UserService {
     // TIME SPENT
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * Increments the student's time_spent field by the given seconds.
-     * Called every 60 seconds from the frontend while the student is active.
-     */
     @Transactional
     public void incrementTimeSpent(Long studentId, Long seconds) {
         User user = userRepository.findById(studentId)
@@ -171,6 +169,24 @@ public class UserService {
             s.setTimeSpent(current + seconds);
             userRepository.save(s);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // INTERVENTION TRACKING
+    // ─────────────────────────────────────────────────────────────
+
+    @Transactional
+    public int incrementInterventionAndAwardBadges(Long studentId, String activityType) {
+        studentRepository.incrementInterventionSessionCount(studentId);
+
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new EmpathaiException("Student not found with id: " + studentId));
+
+        int newCount = student.getInterventionSessionCount();
+
+        rewardsService.checkAndAwardInterventionBadges(studentId, newCount);
+
+        return newCount;
     }
 
     // ─────────────────────────────────────────────────────────────
