@@ -57,12 +57,16 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column(nullable = false)
+    private Boolean active = true;
+
     public User(String email, String password, String name, UserRole role) {
         this.email = email;
         this.username = email;
         this.password = password;
         this.name = name;
         this.role = role;
+        this.active = true;
     }
 
     @Override
@@ -88,6 +92,6 @@ public class User extends BaseEntity implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return Boolean.TRUE.equals(this.active);
     }
 }
