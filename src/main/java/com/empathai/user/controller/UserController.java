@@ -82,11 +82,6 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
 
-    /**
-     * PATCH /api/users/{id}/time-spent
-     * Increments student's time_spent by the given seconds.
-     * Called by frontend every 60 seconds while student is active.
-     */
     @PatchMapping("/{id}/time-spent")
     public ResponseEntity<Void> updateTimeSpent(
             @PathVariable Long id,
@@ -96,6 +91,23 @@ public class UserController {
             userService.incrementTimeSpent(id, seconds);
         }
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * POST /api/users/{id}/intervention-complete
+     * Increments student's interventionSessionCount by 1.
+     * Called when student completes a wellness activity (meditation timer).
+     */
+    @PostMapping("/{id}/intervention-complete")
+    public ResponseEntity<Map<String, Object>> completeIntervention(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        String activityType = body.getOrDefault("activityType", "unknown");
+        int newCount = userService.incrementInterventionAndAwardBadges(id, activityType);
+        return ResponseEntity.ok(Map.of(
+                "interventionSessionCount", newCount,
+                "activityType", activityType
+        ));
     }
 
     @PostMapping("/{id}/reset-password")
