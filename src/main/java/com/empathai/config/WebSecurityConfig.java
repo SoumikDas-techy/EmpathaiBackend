@@ -47,7 +47,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
 
-                        // Assessment endpoints (keep your existing intent; tighten if needed)
+                        // Assessment endpoints
                         .requestMatchers(HttpMethod.GET, "/api/groups/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/groups/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/responses").permitAll()
@@ -58,7 +58,10 @@ public class WebSecurityConfig {
                         .hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/questions/**").authenticated()
 
-                        // 🔒 everything else must be authenticated (controller @PreAuthorize will enforce roles)
+                        // Teachers: accessible only by SUPER_ADMIN and SCHOOL_ADMIN
+                        .requestMatchers("/api/teachers/**").hasAnyRole("SUPER_ADMIN", "SCHOOL_ADMIN")
+
+                        // Everything else must be authenticated (controller @PreAuthorize will enforce roles)
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)
@@ -70,7 +73,6 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
         configuration.setAllowedOriginPatterns(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
@@ -78,7 +80,6 @@ public class WebSecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
     }
 }

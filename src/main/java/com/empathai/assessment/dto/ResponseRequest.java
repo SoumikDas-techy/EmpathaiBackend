@@ -7,14 +7,14 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ResponseRequest {
-    private String studentId;
+    private Long studentId;
     private String studentName;
     private Long questionId;
     private String questionText;
     private String responseValue;
-    private String answer;        // ← frontend sends this
+    private String answer;
     private String emotion;
-    private String groupId;
+    private Long groupId;
     private String groupName;
     private String className;
     private String schoolName;

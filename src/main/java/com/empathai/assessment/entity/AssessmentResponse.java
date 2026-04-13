@@ -18,7 +18,7 @@ public class AssessmentResponse {
     private Long id;
 
     @Column(name = "student_id")
-    private String studentId;
+    private Long studentId;
 
     @Column(name = "student_name")
     private String studentName;
@@ -36,7 +36,7 @@ public class AssessmentResponse {
     private String emotion;
 
     @Column(name = "group_id")
-    private String groupId;
+    private Long groupId;
 
     @Column(name = "group_name")
     private String groupName;
