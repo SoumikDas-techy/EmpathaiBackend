@@ -9,6 +9,7 @@ import lombok.*;
 @Builder
 public class SchoolTimingRequest {
     private Long schoolId;
+    private String className;
     private String dayOfWeek;
     private String startTime;
     private String endTime;

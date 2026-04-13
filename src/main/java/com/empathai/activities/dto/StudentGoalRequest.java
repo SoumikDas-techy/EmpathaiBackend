@@ -2,6 +2,8 @@ package com.empathai.activities.dto;
 
 import lombok.*;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -11,5 +13,6 @@ public class StudentGoalRequest {
 
     private Long studentId;
     private String goalText;
-    private String subjectTag; // e.g. "Mathematics", "Science", "English", "Hindi", "SST"
+    private String subjectTag;
+    private LocalDate targetDate;
 }

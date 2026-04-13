@@ -45,8 +45,6 @@ public class Student extends User {
     @Column(name = "parent_name")
     private String parentName;
 
-    // ── New fields ─────────────────────────────────────────────────────────
-
     /** Incremented every time this student successfully logs in. */
     @Column(name = "login_count", nullable = false, columnDefinition = "INT DEFAULT 0")
     private Integer loginCount = 0;
@@ -54,6 +52,14 @@ public class Student extends User {
     /** Incremented every time this student completes an intervention/counseling session. */
     @Column(name = "intervention_session_count", nullable = false, columnDefinition = "INT DEFAULT 0")
     private Integer interventionSessionCount = 0;
+
+    /** Type of intervention assigned (e.g. Counselling, CBT, Group session). */
+    @Column(name = "intervention")
+    private String intervention;
+
+    /** Total time spent on the platform in seconds. */
+    @Column(name = "time_spent", nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private Long timeSpent = 0L;
 
     // ── Constructor ────────────────────────────────────────────────────────
 

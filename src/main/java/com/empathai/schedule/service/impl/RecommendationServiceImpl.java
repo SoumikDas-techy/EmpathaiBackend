@@ -7,6 +7,8 @@ import com.empathai.schedule.entity.ExamDate;
 import com.empathai.schedule.entity.SchoolTiming;
 import com.empathai.schedule.repository.ExamDateRepository;
 import com.empathai.schedule.repository.SchoolTimingRepository;
+import com.empathai.schedule.repository.ScheduleTaskRepository;
+import com.empathai.schedule.entity.ScheduleTask;
 import com.empathai.schedule.service.IRecommendationService;
 import com.empathai.user.entity.Student;
 import com.empathai.user.repository.StudentRepository;
@@ -28,6 +30,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
     private final ExamDateRepository examDateRepository;
     private final StudentGoalRepository studentGoalRepository;
     private final SchoolTimingRepository schoolTimingRepository;
+    private final ScheduleTaskRepository scheduleTaskRepository;
     private final StudentRepository studentRepository;
 
     // ── Weekly fallback subjects confirmed by sir ─────────────────────────────
@@ -51,20 +54,85 @@ public class RecommendationServiceImpl implements IRecommendationService {
         Long schoolId = student.getSchoolId();
         String className = student.getClassName();
 
-        // 1. Blocked windows for this day
-        List<SchoolTimingResponse> blockedWindows = getBlockedWindows(schoolId, dayOfWeek);
+        // ═══════════════════════════════════════════════════════════════════════
+        // DEBUG LOGGING START
+        // ═══════════════════════════════════════════════════════════════════════
+        log.info("═══════════════════════════════════════════════════════════");
+        log.info("🔍 RECOMMENDATIONS REQUEST");
+        log.info("   Student ID: {}", studentId);
+        log.info("   Class Name: '{}'", className);
+        log.info("   School ID: {}", schoolId);
+        log.info("   Day: {}", dayOfWeek);
+        log.info("═══════════════════════════════════════════════════════════");
+
+        // 1. Blocked windows for this day — filtered by student's class
+        List<SchoolTimingResponse> blockedWindows = getBlockedWindows(schoolId, dayOfWeek, className);
+        log.info("📚 BLOCKED WINDOWS: {} found for {} in class '{}'", blockedWindows.size(), dayOfWeek, className);
+        blockedWindows.forEach(w -> log.info("   - {} to {}", w.getStartTime(), w.getEndTime()));
 
         // 2. Upcoming exams for this student
         List<ExamDateResponse> upcomingExams = getUpcomingExams(schoolId, className);
+        log.info("📝 UPCOMING EXAMS: {} found for class '{}'", upcomingExams.size(), className);
+        if (upcomingExams.isEmpty()) {
+            log.warn("   ⚠️  NO EXAMS FOUND - Check database for:");
+            log.warn("       - schoolId = {}", schoolId);
+            log.warn("       - className = '{}'", className);
+            log.warn("       - examDate > {}", LocalDate.now());
+        } else {
+            upcomingExams.forEach(e -> log.info("   - {} exam on {} ({} days, urgency: {})",
+                    e.getSubjectName(), e.getExamDate(), e.getDaysRemaining(), e.getUrgency()));
+        }
 
         // 3. Student's active goals — read from activities package
         List<StudentGoal> goals = studentGoalRepository.findByStudentIdAndActiveTrue(studentId);
         Set<String> goalSubjects = goals.stream()
                 .map(StudentGoal::getSubjectTag)
                 .collect(Collectors.toSet());
+        log.info("🎯 ACTIVE GOALS: {} goals found", goalSubjects.size());
+        goalSubjects.forEach(g -> log.info("   - {}", g));
 
-        // 4. Generate and rank suggestions
-        List<TaskSuggestion> suggestions = generateSuggestions(upcomingExams, goalSubjects);
+        // 4. Check which weekly subjects the student has already covered this week
+        List<ScheduleTask> weekTasks = scheduleTaskRepository.findByStudentId(studentId);
+        Set<String> coveredSubjects = WEEKLY_SUBJECTS.stream()
+                .filter(subject -> weekTasks.stream()
+                        .anyMatch(t -> t.getTitle() != null &&
+                                t.getTitle().toLowerCase().contains(subject.toLowerCase())))
+                .collect(Collectors.toSet());
+        log.info("✅ COVERED THIS WEEK: {} subjects", coveredSubjects.size());
+        coveredSubjects.forEach(s -> log.info("   - {}", s));
+
+        // 5. Generate and rank suggestions
+        List<TaskSuggestion> suggestions = generateSuggestions(upcomingExams, goalSubjects, coveredSubjects);
+        log.info("💡 SUGGESTIONS GENERATED: {} (before today's filter)", suggestions.size());
+        suggestions.forEach(s -> log.info("   - {} (score: {}, reason: '{}')",
+                s.getTitle(), s.getScore(), s.getReasonLabel()));
+
+        // 6. Remove any suggestion whose subject is already scheduled TODAY
+        List<ScheduleTask> todayTasks = scheduleTaskRepository.findByStudentIdAndDayOfWeek(studentId, dayOfWeek);
+        Set<String> todaySubjects = todayTasks.stream()
+                .filter(t -> t.getTitle() != null)
+                .flatMap(t -> WEEKLY_SUBJECTS.stream()
+                        .filter(s -> t.getTitle().toLowerCase().contains(s.toLowerCase())))
+                .collect(Collectors.toSet());
+        // Also check goal subjects covered today
+        goalSubjects.forEach(gs -> todayTasks.stream()
+                .filter(t -> t.getTitle() != null && t.getTitle().toLowerCase().contains(gs.toLowerCase()))
+                .findFirst()
+                .ifPresent(t -> todaySubjects.add(gs)));
+
+        log.info("🚫 ALREADY SCHEDULED TODAY ({}): {} subjects", dayOfWeek, todaySubjects.size());
+        todaySubjects.forEach(s -> log.info("   - {}", s));
+
+        suggestions = suggestions.stream()
+                .filter(s -> !todaySubjects.contains(s.getSubjectName()))
+                .collect(Collectors.toList());
+
+        log.info("✨ FINAL SUGGESTIONS: {} (after filtering today's tasks)", suggestions.size());
+        suggestions.forEach(s -> log.info("   - {} (reason: '{}')", s.getTitle(), s.getReasonLabel()));
+        log.info("═══════════════════════════════════════════════════════════");
+        // ═══════════════════════════════════════════════════════════════════════
+        // DEBUG LOGGING END
+        // ═══════════════════════════════════════════════════════════════════════
 
         return ScheduleRecommendationResponse.builder()
                 .blockedWindows(blockedWindows)
@@ -77,13 +145,15 @@ public class RecommendationServiceImpl implements IRecommendationService {
     // BLOCKED WINDOWS
     // ─────────────────────────────────────────────────────────────────────────
 
-    private List<SchoolTimingResponse> getBlockedWindows(Long schoolId, String dayOfWeek) {
-        if (schoolId == null) return Collections.emptyList();
+    private List<SchoolTimingResponse> getBlockedWindows(Long schoolId, String dayOfWeek, String className) {
+        if (schoolId == null || className == null) return Collections.emptyList();
 
         return schoolTimingRepository.findBySchoolId(schoolId).stream()
                 .filter(t -> t.getDayOfWeek().equalsIgnoreCase(dayOfWeek))
+                .filter(t -> t.getClassName() != null && t.getClassName().equalsIgnoreCase(className))
                 .map(t -> SchoolTimingResponse.builder()
                         .id(t.getId())
+                        .className(t.getClassName())
                         .dayOfWeek(t.getDayOfWeek())
                         .startTime(t.getStartTime())
                         .endTime(t.getEndTime())
@@ -110,6 +180,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
                             : "NORMAL";
                     return ExamDateResponse.builder()
                             .id(e.getId())
+                            .className(e.getClassName())
                             .subjectName(e.getSubjectName())
                             .examDate(e.getExamDate())
                             .daysRemaining(daysRemaining)
@@ -129,12 +200,14 @@ public class RecommendationServiceImpl implements IRecommendationService {
 
     private List<TaskSuggestion> generateSuggestions(
             List<ExamDateResponse> upcomingExams,
-            Set<String> goalSubjects) {
+            Set<String> goalSubjects,
+            Set<String> coveredSubjects) {
 
         Map<String, TaskSuggestion> suggestionMap = new LinkedHashMap<>();
 
-        // ── Step 1: Seed all weekly subjects as base fallback ─────────────────
+        // ── Step 1: Seed weekly subjects that are NOT yet covered this week ───
         for (String subject : WEEKLY_SUBJECTS) {
+            if (coveredSubjects.contains(subject)) continue;
             TaskSuggestion s = TaskSuggestion.builder()
                     .title("Study session — " + subject)
                     .subjectName(subject)
@@ -205,6 +278,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
         List<SchoolTiming> saved = requests.stream()
                 .map(r -> SchoolTiming.builder()
                         .schoolId(schoolId)
+                        .className(r.getClassName())
                         .dayOfWeek(r.getDayOfWeek())
                         .startTime(r.getStartTime())
                         .endTime(r.getEndTime())
@@ -215,6 +289,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
         return saved.stream()
                 .map(t -> SchoolTimingResponse.builder()
                         .id(t.getId())
+                        .className(t.getClassName())
                         .dayOfWeek(t.getDayOfWeek())
                         .startTime(t.getStartTime())
                         .endTime(t.getEndTime())
@@ -227,6 +302,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
         return schoolTimingRepository.findBySchoolId(schoolId).stream()
                 .map(t -> SchoolTimingResponse.builder()
                         .id(t.getId())
+                        .className(t.getClassName())
                         .dayOfWeek(t.getDayOfWeek())
                         .startTime(t.getStartTime())
                         .endTime(t.getEndTime())
@@ -250,6 +326,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
         long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), saved.getExamDate());
         return ExamDateResponse.builder()
                 .id(saved.getId())
+                .className(saved.getClassName())
                 .subjectName(saved.getSubjectName())
                 .examDate(saved.getExamDate())
                 .daysRemaining(daysRemaining)
@@ -270,6 +347,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
                     long days = ChronoUnit.DAYS.between(today, e.getExamDate());
                     return ExamDateResponse.builder()
                             .id(e.getId())
+                            .className(e.getClassName())
                             .subjectName(e.getSubjectName())
                             .examDate(e.getExamDate())
                             .daysRemaining(days)

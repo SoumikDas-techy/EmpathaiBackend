@@ -11,6 +11,7 @@ import java.time.LocalDate;
 @Builder
 public class ExamDateResponse {
     private Long id;
+    private String className;        // ← ADD THIS LINE
     private String subjectName;
     private LocalDate examDate;
     private long daysRemaining;

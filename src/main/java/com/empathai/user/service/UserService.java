@@ -1,5 +1,6 @@
 package com.empathai.user.service;
 
+import com.empathai.rewards.service.RewardsService;
 import com.empathai.user.dto.user.*;
 import com.empathai.user.entity.*;
 import com.empathai.user.entity.enums.UserRole;
@@ -7,7 +8,6 @@ import com.empathai.user.exception.EmpathaiException;
 import com.empathai.user.repository.SchoolRepository;
 import com.empathai.user.repository.StudentRepository;
 import com.empathai.user.repository.UserRepository;
-import com.empathai.assessment.repository.AssessmentResponseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -27,7 +27,7 @@ public class UserService {
     private final StudentRepository studentRepository;
     private final SchoolRepository schoolRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AssessmentResponseRepository assessmentResponseRepository;
+    private final RewardsService rewardsService;
 
     // ─────────────────────────────────────────────────────────────
     // CREATE / UPDATE / DELETE
@@ -53,8 +53,6 @@ public class UserService {
                     .dateOfBirth(request.getDateOfBirth())
                     .parentName(request.getParentName())
                     .address(request.getAddress())
-                    .age(request.getAge())
-                    .gender(request.getGender())
                     .build();
         }
 
@@ -96,7 +94,6 @@ public class UserService {
                 s.setParentEmail(request.getParentEmail());
                 s.setRollNo(request.getRollNo());
                 s.setDateOfBirth(request.getDateOfBirth());
-
                 if (request.getAge() != null) s.setAge(request.getAge());
                 s.setParentName(request.getParentName());
                 if (request.getGender() != null) s.setGender(request.getGender());
@@ -153,27 +150,49 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new EmpathaiException("User not found"));
-
-        // If deleting a student, also remove all their assessment responses
-        // (student_id in responses is stored as email or numeric id string)
-        if (user instanceof Student) {
-            assessmentResponseRepository.deleteByStudentId(user.getId());
+        if (!userRepository.existsById(id)) {
+            throw new EmpathaiException("User not found");
         }
-
         userRepository.deleteById(id);
     }
 
     // ─────────────────────────────────────────────────────────────
-    // ROLE-SPECIFIC LIST ENDPOINTS (lean DTOs, no audit fields)
+    // TIME SPENT
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * GET /api/users/students
-     * Returns StudentSummaryResponse: id, name, email, username, active, school, className, rollNo.
-     * No audit fields. No student-only fields irrelevant to list view.
-     */
+    @Transactional
+    public void incrementTimeSpent(Long studentId, Long seconds) {
+        User user = userRepository.findById(studentId)
+                .orElseThrow(() -> new EmpathaiException("User not found with id: " + studentId));
+        if (user instanceof Student s) {
+            long current = s.getTimeSpent() != null ? s.getTimeSpent() : 0L;
+            s.setTimeSpent(current + seconds);
+            userRepository.save(s);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // INTERVENTION TRACKING
+    // ─────────────────────────────────────────────────────────────
+
+    @Transactional
+    public int incrementInterventionAndAwardBadges(Long studentId, String activityType) {
+        studentRepository.incrementInterventionSessionCount(studentId);
+
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new EmpathaiException("Student not found with id: " + studentId));
+
+        int newCount = student.getInterventionSessionCount();
+
+        rewardsService.checkAndAwardInterventionBadges(studentId, newCount);
+
+        return newCount;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ROLE-SPECIFIC LIST ENDPOINTS
+    // ─────────────────────────────────────────────────────────────
+
     public Page<StudentSummaryResponse> getStudentPage(String school, String search, int page, int size) {
         List<StudentSummaryResponse> all = studentRepository.findAll().stream()
                 .filter(s -> {
@@ -191,10 +210,9 @@ public class UserService {
                         .name(s.getName())
                         .email(s.getEmail())
                         .username(s.getUsername())
-                        .active(Boolean.TRUE.equals(s.getActive()))
+                        .active(true)
                         .className(s.getClassName())
                         .rollNo(s.getRollNo())
-                        // school name resolved from schoolId
                         .school(s.getSchoolId() != null
                                 ? schoolRepository.findById(s.getSchoolId()).map(sc -> sc.getName()).orElse(null)
                                 : null)
@@ -206,11 +224,6 @@ public class UserService {
         return new PageImpl<>(all.subList(start, end), PageRequest.of(page, size), all.size());
     }
 
-    /**
-     * GET /api/users/school-admins
-     * Returns SchoolAdminResponse: id, name, email, username, active, schoolId, school name.
-     * No audit fields. No student-specific fields.
-     */
     public Page<SchoolAdminResponse> getSchoolAdminPage(String search, int page, int size) {
         List<SchoolAdminResponse> all = userRepository.findAll().stream()
                 .filter(u -> u.getRole() == UserRole.SCHOOL_ADMIN)
@@ -223,7 +236,7 @@ public class UserService {
                             .name(sa.getName())
                             .email(sa.getEmail())
                             .username(sa.getUsername())
-                            .active(Boolean.TRUE.equals(sa.getActive()))
+                            .active(true)
                             .schoolId(sa.getSchoolId());
                     if (sa.getSchoolId() != null) {
                         schoolRepository.findById(sa.getSchoolId())
@@ -238,11 +251,6 @@ public class UserService {
         return new PageImpl<>(all.subList(start, end), PageRequest.of(page, size), all.size());
     }
 
-    /**
-     * GET /api/users/psychologists
-     * Returns PsychologistResponse: id, name, email, username, phoneNumber, active.
-     * No audit fields. No school/student fields.
-     */
     public Page<PsychologistResponse> getPsychologistPage(String search, int page, int size) {
         List<PsychologistResponse> all = userRepository.findAll().stream()
                 .filter(u -> u.getRole() == UserRole.PSYCHOLOGIST)
@@ -256,7 +264,7 @@ public class UserService {
                             .email(p.getEmail())
                             .username(p.getUsername())
                             .phoneNumber(p.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(p.getActive()))
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -266,11 +274,6 @@ public class UserService {
         return new PageImpl<>(all.subList(start, end), PageRequest.of(page, size), all.size());
     }
 
-    /**
-     * GET /api/users/content-admins
-     * Returns ContentAdminResponse: id, name, email, username, phoneNumber, active.
-     * No audit fields. No school/student fields.
-     */
     public Page<ContentAdminResponse> getContentAdminPage(String search, int page, int size) {
         List<ContentAdminResponse> all = userRepository.findAll().stream()
                 .filter(u -> u.getRole() == UserRole.CONTENT_ADMIN)
@@ -284,7 +287,7 @@ public class UserService {
                             .email(ca.getEmail())
                             .username(ca.getUsername())
                             .phoneNumber(ca.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(ca.getActive()))
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -295,27 +298,21 @@ public class UserService {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // DETAIL / INTERNAL USE — keeps full UserResponse
+    // DETAIL / INTERNAL USE
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * GET /api/users/{id} — full user detail for edit screens.
-     * Keeps all fields. Audit fields excluded from UserResponse DTO itself.
-     */
     public UserResponse getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EmpathaiException("User not found with id: " + id));
         return mapToFullResponse(user);
     }
 
-    /** Used by /me endpoint and internal calls. */
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::mapToFullResponse)
                 .collect(Collectors.toList());
     }
 
-    /** Still available for internal use but no longer exposed on list endpoints. */
     public List<UserResponse> getUsersByRole(UserRole role) {
         if (role == UserRole.STUDENT) {
             return studentRepository.findAll().stream()
@@ -344,10 +341,6 @@ public class UserService {
         return null;
     }
 
-    /**
-     * Full response mapper — used for create/update/detail views only.
-     * Audit fields are excluded from UserResponse DTO (not mapped here).
-     */
     public UserResponse mapToFullResponse(User user) {
         UserResponse.UserResponseBuilder builder = UserResponse.builder()
                 .id(user.getId())
@@ -355,8 +348,7 @@ public class UserService {
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .role(user.getRole())
-                .active(Boolean.TRUE.equals(user.getActive()));
-        // Audit fields intentionally not mapped — removed from UserResponse DTO
+                .active(true);
 
         if (user instanceof SchoolAdmin sa && sa.getSchoolId() != null) {
             builder.schoolId(sa.getSchoolId());
@@ -380,9 +372,12 @@ public class UserService {
                     .dateOfBirth(s.getDateOfBirth())
                     .age(s.getAge())
                     .gender(s.getGender())
-                    .parentName(s.getParentName());
+                    .parentName(s.getParentName())
+                    .loginCount(s.getLoginCount())
+                    .interventionSessionCount(s.getInterventionSessionCount())
+                    .intervention(s.getIntervention())
+                    .timeSpent(s.getTimeSpent());
         }
-
 
         return builder.build();
     }
