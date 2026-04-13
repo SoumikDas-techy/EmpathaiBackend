@@ -7,6 +7,7 @@ import com.empathai.user.exception.EmpathaiException;
 import com.empathai.user.repository.SchoolRepository;
 import com.empathai.user.repository.StudentRepository;
 import com.empathai.user.repository.UserRepository;
+import com.empathai.assessment.repository.AssessmentResponseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -26,6 +27,7 @@ public class UserService {
     private final StudentRepository studentRepository;
     private final SchoolRepository schoolRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AssessmentResponseRepository assessmentResponseRepository;
 
     // ─────────────────────────────────────────────────────────────
     // CREATE / UPDATE / DELETE
@@ -151,9 +153,15 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id) {
-        if (!userRepository.existsById(id)) {
-            throw new EmpathaiException("User not found");
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new EmpathaiException("User not found"));
+
+        // If deleting a student, also remove all their assessment responses
+        // (student_id in responses is stored as email or numeric id string)
+        if (user instanceof Student) {
+            assessmentResponseRepository.deleteByStudentId(user.getId());
         }
+
         userRepository.deleteById(id);
     }
 
@@ -358,9 +366,13 @@ public class UserService {
             builder.phoneNumber(p.getPhoneNumber());
         } else if (user instanceof ContentAdmin ca) {
             builder.phoneNumber(ca.getPhoneNumber());
-        } else if (user instanceof Student s && s.getSchoolId() != null) {
-            builder.schoolId(s.getSchoolId())
-                    .rollNo(s.getRollNo())
+        } else if (user instanceof Student s) {
+            if (s.getSchoolId() != null) {
+                builder.schoolId(s.getSchoolId());
+                schoolRepository.findById(s.getSchoolId())
+                        .ifPresent(sc -> builder.school(sc.getName()));
+            }
+            builder.rollNo(s.getRollNo())
                     .className(s.getClassName())
                     .section(s.getSection())
                     .phoneNumber(s.getPhoneNumber())
@@ -369,8 +381,6 @@ public class UserService {
                     .age(s.getAge())
                     .gender(s.getGender())
                     .parentName(s.getParentName());
-            schoolRepository.findById(s.getSchoolId())
-                    .ifPresent(sc -> builder.school(sc.getName()));
         }
 
 

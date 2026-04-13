@@ -57,28 +57,14 @@ public class AssessmentController {
 
         List<QuestionResponse> combinedQuestions = new ArrayList<>();
 
-        // 1. Questions for the student's own class
+        // Only fetch questions for the student's own class group
         List<GroupResponse> classGroups = assessmentService.getGroupsByClassName(className);
         for (GroupResponse group : classGroups) {
             List<QuestionResponse> qs = assessmentService.getQuestionsByGroupMap(group.getId());
             if (qs != null) combinedQuestions.addAll(qs);
         }
 
-        // 2. Daily Check-in questions (shown to ALL students)
-        List<GroupResponse> dailyGroups = assessmentService.getGroupsByClassName("Daily Check-in");
-        for (GroupResponse group : dailyGroups) {
-            List<QuestionResponse> qs = assessmentService.getQuestionsByGroupMap(group.getId());
-            if (qs != null) combinedQuestions.addAll(qs);
-        }
-
-        // 3. Global "ALL" class groups
-        List<GroupResponse> globalGroups = assessmentService.getGroupsByClassName("ALL");
-        for (GroupResponse group : globalGroups) {
-            List<QuestionResponse> qs = assessmentService.getQuestionsByGroupMap(group.getId());
-            if (qs != null) combinedQuestions.addAll(qs);
-        }
-
-        // 4. Deduplicate by question ID (not object reference)
+        // Deduplicate by question ID
         List<QuestionResponse> finalQuestions = combinedQuestions.stream()
                 .filter(q -> q.getId() != null)
                 .collect(Collectors.collectingAndThen(
@@ -119,10 +105,10 @@ public class AssessmentController {
 
     @DeleteMapping("/questions/{id}")
 
-        public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
-            assessmentService.deleteQuestion(id);
-            return ResponseEntity.noContent().build();
-        }
+    public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
+        assessmentService.deleteQuestion(id);
+        return ResponseEntity.noContent().build();
+    }
 
 
     // ── Responses ─────────────────────────────────────────────────────────────

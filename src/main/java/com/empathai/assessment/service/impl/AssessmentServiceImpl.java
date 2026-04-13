@@ -171,8 +171,10 @@ public class AssessmentServiceImpl implements IAssessmentService {
             existing.setResponseValue(value);
             existing.setEmotion(request.getEmotion());
             existing.setGroupName(request.getGroupName());
-            existing.setClassName(normalizedClass);  
+            existing.setClassName(normalizedClass);
             existing.setSchoolName(request.getSchoolName());
+            if (request.getStudentName() != null && !request.getStudentName().isBlank())
+                existing.setStudentName(request.getStudentName());
             if (request.getGender() != null) existing.setGender(request.getGender());
             if (request.getAge()    != null) existing.setAge(request.getAge());
             return toResponseDto(responseRepo.save(existing));
@@ -221,16 +223,7 @@ public class AssessmentServiceImpl implements IAssessmentService {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * STEP 5 FIX:
-     * Converts any class name format to the standard "Class Nth" format.
-     *
-     * Examples:
-     *   "8th Standard"  → "Class 8th"
-     *   "8 Standard"    → "Class 8th"
-     *   "8"             → "Class 8th"
-     *   "Class 8th"     → "Class 8th"  (unchanged)
-     */
+
     private String normalizeClassName(String raw) {
         if (raw == null || raw.isBlank()) return raw;
         raw = raw.trim();
@@ -250,10 +243,7 @@ public class AssessmentServiceImpl implements IAssessmentService {
         return "Class " + cleaned;
     }
 
-    /**
-     * Returns the English ordinal suffix for a number.
-     * 1 → "st", 2 → "nd", 3 → "rd", 4-20 → "th", 21 → "st", etc.
-     */
+
     private String ordinalSuffix(int n) {
         int v = n % 100;
         if (v >= 11 && v <= 13) return "th";
