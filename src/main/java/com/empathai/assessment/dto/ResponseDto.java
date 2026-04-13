@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ResponseDto {
     private Long id;
-    private String studentId;
+    private Long studentId;
     private String studentName;
     private Long questionId;
     private String questionText;
@@ -17,7 +17,7 @@ public class ResponseDto {
     private String emotion;
     private String className;
     private String gender;
-    private String groupId;
+    private Long groupId;
     private String groupName;
     private String schoolName;
     private Integer age;

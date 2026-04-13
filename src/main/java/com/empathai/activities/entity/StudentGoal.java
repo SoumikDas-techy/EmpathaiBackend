@@ -3,6 +3,7 @@ package com.empathai.activities.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -27,6 +28,10 @@ public class StudentGoal {
     // e.g. "Mathematics", "Science", "English", "Hindi", "SST"
     @Column(name = "subject_tag", nullable = false)
     private String subjectTag;
+
+    // Target date the student wants to achieve the goal by
+    @Column(name = "target_date")
+    private LocalDate targetDate;
 
     @Builder.Default
     @Column(name = "created_at", nullable = false)

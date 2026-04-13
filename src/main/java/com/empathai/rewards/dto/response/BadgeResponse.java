@@ -11,7 +11,8 @@ public class BadgeResponse {
     private String imageType;
     private String triggerType;
     private String triggerTitle;
+    private String triggerValue;  // FIX: was missing — frontend login progress bar reads this
     private LocalDateTime createdAt;
     private LocalDateTime modifiedAt;
-    private LocalDateTime earnedAt; // FIX: populated when fetching student badges
+    private LocalDateTime earnedAt; // populated when fetching student badges
 }

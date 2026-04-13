@@ -57,7 +57,7 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false)
     private UserRole role;
 
-    @Column(name = "is_active", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
+    @Column(nullable = false)
     private Boolean active = true;
 
     public User(String email, String password, String name, UserRole role) {
@@ -66,18 +66,32 @@ public class User extends BaseEntity implements UserDetails {
         this.password = password;
         this.name = name;
         this.role = role;
+        this.active = true;
     }
-
 
     @Override
     @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
-
     }
 
-    @Override public boolean isAccountNonExpired() { return true; }
-    @Override public boolean isAccountNonLocked() { return true; }
-    @Override public boolean isCredentialsNonExpired() { return true; }
-    @Override public boolean isEnabled() { return active != null && active; }
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return Boolean.TRUE.equals(this.active);
+    }
 }

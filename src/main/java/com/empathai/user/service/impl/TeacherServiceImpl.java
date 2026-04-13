@@ -72,7 +72,7 @@ public class TeacherServiceImpl implements TeacherService {
                 .email(t.getEmail())
                 .username(t.getUsername())
                 .phoneNumber(t.getPhoneNumber())
-                .active(Boolean.TRUE.equals(t.getActive()))
+                .active(true) // Always true since active field removed from User
                 .subjects(csvToList(t.getSubjects()))
                 .classesCovered(csvToList(t.getClassesCovered()))
                 .schoolId(t.getSchoolId())
@@ -102,7 +102,6 @@ public class TeacherServiceImpl implements TeacherService {
     public TeacherResponse updateTeacher(Long id, TeacherRequest request) {
         Teacher t = teacherRepository.findById(id)
                 .orElseThrow(() -> new EmpathaiException("Teacher not found: " + id));
-
 
         if (request.getName() != null && !request.getName().isBlank())
             t.setName(request.getName());

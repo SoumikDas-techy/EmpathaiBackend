@@ -39,23 +39,29 @@ public class WebSecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Allow preflight
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/groups/**").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/groups/**").authenticated()
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/responses").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/responses/**").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/**").authenticated()
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/questions/**").permitAll()
 
+                        // Assessment endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/groups/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/groups/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/responses").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/responses/**").permitAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/questions/**")
                         .hasAnyRole("SUPER_ADMIN", "ADMIN")
-                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/questions/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/questions/**").authenticated()
 
-                        // ── Teachers: accessible only by SUPER_ADMIN and SCHOOL_ADMIN ──
+                        // Teachers: accessible only by SUPER_ADMIN and SCHOOL_ADMIN
                         .requestMatchers("/api/teachers/**").hasAnyRole("SUPER_ADMIN", "SCHOOL_ADMIN")
 
+                        // Everything else must be authenticated (controller @PreAuthorize will enforce roles)
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)
@@ -71,6 +77,7 @@ public class WebSecurityConfig {
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

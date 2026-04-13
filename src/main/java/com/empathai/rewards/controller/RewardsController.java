@@ -3,10 +3,15 @@ package com.empathai.rewards.controller;
 import com.empathai.rewards.dto.response.AchievementResponse;
 import com.empathai.rewards.dto.response.BadgeResponse;
 import com.empathai.rewards.service.RewardsService;
+import com.empathai.user.entity.User;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,10 +22,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RewardsController {
 
+    private static final Logger logger = LoggerFactory.getLogger(RewardsController.class);
     private final RewardsService rewardsService;
 
     // ══════════════════════════════════════════════════════════════════════
-    // BADGES  (admin-only CRUD)
+    // BADGES (ADMIN)
     // ══════════════════════════════════════════════════════════════════════
 
     @GetMapping("/badges")
@@ -35,9 +41,10 @@ public class RewardsController {
             @RequestParam("title") String title,
             @RequestParam("triggerType") String triggerType,
             @RequestParam("triggerTitle") String triggerTitle,
+            @RequestParam(value = "triggerValue", required = false) String triggerValue,
             @RequestParam(value = "image", required = false) MultipartFile image) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(rewardsService.createBadge(title, triggerType, triggerTitle, image));
+                .body(rewardsService.createBadge(title, triggerType, triggerTitle, triggerValue, image));
     }
 
     @PutMapping("/badges/{id}")
@@ -47,8 +54,9 @@ public class RewardsController {
             @RequestParam("title") String title,
             @RequestParam("triggerType") String triggerType,
             @RequestParam("triggerTitle") String triggerTitle,
+            @RequestParam(value = "triggerValue", required = false) String triggerValue,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.ok(rewardsService.updateBadge(id, title, triggerType, triggerTitle, image));
+        return ResponseEntity.ok(rewardsService.updateBadge(id, title, triggerType, triggerTitle, triggerValue, image));
     }
 
     @DeleteMapping("/badges/{id}")
@@ -60,20 +68,36 @@ public class RewardsController {
 
     // ══════════════════════════════════════════════════════════════════════
     // STUDENT BADGES
-    // GET /api/rewards/students/{studentId}/badges
-    // Accessible by the student themselves and all staff roles.
-    // Previously this endpoint was missing entirely, which caused Spring
-    // Security to return HTTP 403 for any authenticated STUDENT request.
     // ══════════════════════════════════════════════════════════════════════
 
+    /**
+     * Student fetches their OWN badges — ID comes from JWT, never from URL.
+     */
+    @GetMapping("/students/me/badges")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<List<BadgeResponse>> getMyBadges() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            User user = (User) auth.getPrincipal();
+            List<BadgeResponse> badges = rewardsService.getStudentBadges(user.getId());
+            return ResponseEntity.ok(badges);
+        } catch (Exception e) {
+            logger.error("Error fetching badges for student", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Admin / staff fetch any student's badges by ID.
+     */
     @GetMapping("/students/{studentId}/badges")
-    @PreAuthorize("hasAnyRole('STUDENT', 'SUPER_ADMIN', 'SCHOOL_ADMIN', 'PSYCHOLOGIST', 'CONTENT_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN', 'PSYCHOLOGIST')")
     public ResponseEntity<List<BadgeResponse>> getStudentBadges(@PathVariable Long studentId) {
         return ResponseEntity.ok(rewardsService.getStudentBadges(studentId));
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // ACHIEVEMENTS  (admin-only CRUD)
+    // ACHIEVEMENTS (ADMIN)
     // ══════════════════════════════════════════════════════════════════════
 
     @GetMapping("/achievements")
