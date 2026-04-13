@@ -20,22 +20,20 @@ public class ActivityServiceImpl implements IActivityService {
 
     private final StudentGoalRepository studentGoalRepository;
 
-    // ── Save a new goal ───────────────────────────────────────────────────────
     @Override
     public StudentGoalResponse saveGoal(StudentGoalRequest request) {
         StudentGoal goal = StudentGoal.builder()
                 .studentId(request.getStudentId())
                 .goalText(request.getGoalText())
                 .subjectTag(request.getSubjectTag())
+                .targetDate(request.getTargetDate())
                 .build();
 
         StudentGoal saved = studentGoalRepository.save(goal);
         log.info("Goal saved for studentId={}, subject={}", saved.getStudentId(), saved.getSubjectTag());
-
         return mapToResponse(saved);
     }
 
-    // ── Get all active goals for a student ────────────────────────────────────
     @Override
     public List<StudentGoalResponse> getGoals(Long studentId) {
         return studentGoalRepository.findByStudentIdAndActiveTrue(studentId)
@@ -44,7 +42,6 @@ public class ActivityServiceImpl implements IActivityService {
                 .collect(Collectors.toList());
     }
 
-    // ── Delete a specific goal ────────────────────────────────────────────────
     @Override
     @Transactional
     public void deleteGoal(Long studentId, Long goalId) {
@@ -52,12 +49,12 @@ public class ActivityServiceImpl implements IActivityService {
         log.info("Goal deleted — studentId={}, goalId={}", studentId, goalId);
     }
 
-    // ── Helper: map entity to response DTO ───────────────────────────────────
     private StudentGoalResponse mapToResponse(StudentGoal goal) {
         return StudentGoalResponse.builder()
                 .id(goal.getId())
                 .goalText(goal.getGoalText())
                 .subjectTag(goal.getSubjectTag())
+                .targetDate(goal.getTargetDate())
                 .createdAt(goal.getCreatedAt())
                 .build();
     }
