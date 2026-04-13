@@ -41,11 +41,6 @@ public class SchoolService {
         return mapToFullResponse(schoolRepository.save(school));
     }
 
-    /**
-     * LEVEL 1 - School list view.
-     * Returns only id, name, studentCount per school.
-     * Uses countBySchoolId (COUNT query) - no full student rows fetched.
-     */
     public List<SchoolSummaryResponse> getAllSchoolSummaries() {
         return schoolRepository.findAll().stream()
                 .map(school -> SchoolSummaryResponse.builder()
@@ -56,11 +51,6 @@ public class SchoolService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * LEVEL 2 - Classes inside a school.
-     * Returns className + studentCount only.
-     * Groups by className in memory - avoids needing a separate classes table.
-     */
     public List<ClassSummaryResponse> getClassesBySchool(Long schoolId) {
         schoolRepository.findById(schoolId)
                 .orElseThrow(() -> new EmpathaiException("School not found with id: " + schoolId));
@@ -80,10 +70,6 @@ public class SchoolService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * LEVEL 3 - Students inside a specific class of a school.
-     * Returns full student detail. No audit fields.
-     */
     public List<StudentDetailResponse> getStudentsBySchoolAndClass(Long schoolId, String className) {
         String schoolName = schoolRepository.findById(schoolId)
                 .map(School::getName)
@@ -98,15 +84,13 @@ public class SchoolService {
                         .phoneNumber(s.getPhoneNumber())
                         .parentEmail(s.getParentEmail())
                         .parentName(s.getParentName())
-                        .active(Boolean.TRUE.equals(s.getActive()))
+                        .active(true) // Always true since active field removed
                         .schoolId(s.getSchoolId())
                         .school(schoolName)
                         .className(s.getClassName())
                         .section(s.getSection())
-
                         .rollNo(s.getRollNo())
                         .dateOfBirth(s.getDateOfBirth())
-
                         .build())
                 .collect(Collectors.toList());
     }
@@ -147,7 +131,6 @@ public class SchoolService {
         schoolRepository.deleteById(id);
     }
 
-    // Used internally by UserService for school name lookups
     public List<SchoolResponse> getAllSchools() {
         return schoolRepository.findAll().stream()
                 .map(this::mapToFullResponse)
@@ -163,7 +146,6 @@ public class SchoolService {
                 .contactName(school.getContactName())
                 .email(school.getEmail())
                 .active(Boolean.TRUE.equals(school.getActive()))
-                // Audit fields (createdAt, createdBy, updatedAt, updatedBy) intentionally excluded
                 .build();
     }
 }

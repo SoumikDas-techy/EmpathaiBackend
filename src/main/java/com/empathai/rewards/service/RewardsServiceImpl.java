@@ -11,6 +11,7 @@ import com.empathai.rewards.repository.StudentBadgeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -35,6 +36,7 @@ public class RewardsServiceImpl implements RewardsService {
         res.setTitle(badge.getTitle());
         res.setTriggerType(badge.getTriggerType());
         res.setTriggerTitle(badge.getTriggerTitle());
+        res.setTriggerValue(badge.getTriggerValue());
         res.setImageType(badge.getImageType());
         res.setCreatedAt(badge.getCreatedAt());
         res.setModifiedAt(badge.getModifiedAt());
@@ -80,13 +82,13 @@ public class RewardsServiceImpl implements RewardsService {
 
     /**
      * Awards a badge to a student if:
-     *   1. A badge with the given triggerType and triggerTitle (milestone value) exists.
+     *   1. A badge with the given triggerType and triggerValue exists.
      *   2. The student has not already earned that badge.
      */
     private void awardIfEligible(Long studentId, String triggerType, String milestoneValue) {
         List<Badge> candidates = badgeRepository.findAll().stream()
                 .filter(b -> triggerType.equalsIgnoreCase(b.getTriggerType())
-                        && milestoneValue.equals(b.getTriggerTitle()))
+                        && milestoneValue.equals(b.getTriggerValue()))
                 .collect(Collectors.toList());
 
         for (Badge badge : candidates) {
@@ -103,6 +105,7 @@ public class RewardsServiceImpl implements RewardsService {
     // ── Badges ────────────────────────────────────────────────────────────
 
     @Override
+    @Transactional(readOnly = true)
     public List<BadgeResponse> getAllBadges() {
         return badgeRepository.findAll()
                 .stream()
@@ -111,36 +114,56 @@ public class RewardsServiceImpl implements RewardsService {
     }
 
     @Override
-    public BadgeResponse createBadge(String title, String triggerType, String triggerTitle, MultipartFile image) {
+    @Transactional
+    public BadgeResponse createBadge(String title, String triggerType, String triggerTitle,
+                                     String triggerValue, MultipartFile image) {
         Badge badge = new Badge();
         badge.setTitle(title);
         badge.setTriggerType(triggerType);
         badge.setTriggerTitle(triggerTitle);
-        try { applyImage(image, badge); } catch (IOException e) { throw new RuntimeException("Failed to process image", e); }
+        badge.setTriggerValue(triggerValue);
+        try {
+            applyImage(image, badge);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to process image", e);
+        }
         return toBadgeResponse(badgeRepository.save(badge));
     }
 
     @Override
-    public BadgeResponse updateBadge(Long id, String title, String triggerType, String triggerTitle, MultipartFile image) {
+    @Transactional
+    public BadgeResponse updateBadge(Long id, String title, String triggerType, String triggerTitle,
+                                     String triggerValue, MultipartFile image) {
         Badge badge = badgeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Badge not found: " + id));
         badge.setTitle(title);
         badge.setTriggerType(triggerType);
         badge.setTriggerTitle(triggerTitle);
-        try { applyImage(image, badge); } catch (IOException e) { throw new RuntimeException("Failed to process image", e); }
+        badge.setTriggerValue(triggerValue);
+        try {
+            applyImage(image, badge);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to process image", e);
+        }
         return toBadgeResponse(badgeRepository.save(badge));
     }
 
     @Override
+    @Transactional
     public void deleteBadge(Long id) {
-        if (!badgeRepository.existsById(id)) throw new RuntimeException("Badge not found: " + id);
+        if (!badgeRepository.existsById(id)) {
+            throw new RuntimeException("Badge not found: " + id);
+        }
         badgeRepository.deleteById(id);
     }
 
     // ── Student Badges ────────────────────────────────────────────────────
 
     @Override
+    @Transactional(readOnly = true)
     public List<BadgeResponse> getStudentBadges(Long studentId) {
+        // Uses JOIN FETCH to eagerly load badge within transaction
+        // This prevents LazyInitializationException
         return studentBadgeRepository.findByStudentId(studentId)
                 .stream()
                 .map(this::toStudentBadgeResponse)
@@ -150,21 +173,21 @@ public class RewardsServiceImpl implements RewardsService {
     // ── Badge Award Triggers ──────────────────────────────────────────────
 
     @Override
+    @Transactional
     public void checkAndAwardLoginBadges(Long studentId, int totalLogins) {
-        // Award a badge for every login milestone the student just reached.
-        // Badge triggerTitle must equal the milestone count as a string, e.g. "1", "5", "10".
         awardIfEligible(studentId, "login", String.valueOf(totalLogins));
     }
 
     @Override
+    @Transactional
     public void checkAndAwardInterventionBadges(Long studentId, int totalInterventions) {
-        // Award a badge for every intervention milestone the student just reached.
         awardIfEligible(studentId, "intervention", String.valueOf(totalInterventions));
     }
 
     // ── Achievements ──────────────────────────────────────────────────────
 
     @Override
+    @Transactional(readOnly = true)
     public List<AchievementResponse> getAllAchievements() {
         return achievementRepository.findAll()
                 .stream()
@@ -173,27 +196,40 @@ public class RewardsServiceImpl implements RewardsService {
     }
 
     @Override
+    @Transactional
     public AchievementResponse createAchievement(String title, String description, MultipartFile image) {
         Achievement achievement = new Achievement();
         achievement.setTitle(title);
         achievement.setDescription(description);
-        try { applyImage(image, achievement); } catch (IOException e) { throw new RuntimeException("Failed to process image", e); }
+        try {
+            applyImage(image, achievement);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to process image", e);
+        }
         return toAchievementResponse(achievementRepository.save(achievement));
     }
 
     @Override
+    @Transactional
     public AchievementResponse updateAchievement(Long id, String title, String description, MultipartFile image) {
         Achievement achievement = achievementRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Achievement not found: " + id));
         achievement.setTitle(title);
         achievement.setDescription(description);
-        try { applyImage(image, achievement); } catch (IOException e) { throw new RuntimeException("Failed to process image", e); }
+        try {
+            applyImage(image, achievement);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to process image", e);
+        }
         return toAchievementResponse(achievementRepository.save(achievement));
     }
 
     @Override
+    @Transactional
     public void deleteAchievement(Long id) {
-        if (!achievementRepository.existsById(id)) throw new RuntimeException("Achievement not found: " + id);
+        if (!achievementRepository.existsById(id)) {
+            throw new RuntimeException("Achievement not found: " + id);
+        }
         achievementRepository.deleteById(id);
     }
 }
