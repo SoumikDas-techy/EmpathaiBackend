@@ -30,7 +30,7 @@ public class TeacherRequest {
     private List<String> subjects;
 
 
-    private List<String> classesCovered;
+    private List<Integer> classesCovered;
 
 
     private String school;
