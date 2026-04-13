@@ -1,5 +1,6 @@
 package com.empathai.activities.entity;
 
+import com.empathai.user.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,7 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StudentGoal {
+public class StudentGoal extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,17 +26,11 @@ public class StudentGoal {
     @Column(name = "goal_text", nullable = false)
     private String goalText;
 
-    // e.g. "Mathematics", "Science", "English", "Hindi", "SST"
     @Column(name = "subject_tag", nullable = false)
     private String subjectTag;
 
-    // Target date the student wants to achieve the goal by
     @Column(name = "target_date")
     private LocalDate targetDate;
-
-    @Builder.Default
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
