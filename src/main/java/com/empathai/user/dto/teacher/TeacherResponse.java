@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.time.LocalDateTime;
 
 import java.util.List;
 
@@ -20,9 +21,12 @@ public class TeacherResponse {
     private String phoneNumber;
     private boolean active;
 
-
+    private LocalDateTime createdAt;
+    private String createdBy;
+    private LocalDateTime updatedAt;
+    private String updatedBy;
     private List<String> subjects;
-    private List<String> classesCovered;
+    private List<Integer> classesCovered;
 
     private Long schoolId;
     private String school;
