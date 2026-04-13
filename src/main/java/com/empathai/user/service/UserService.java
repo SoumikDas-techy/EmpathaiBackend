@@ -7,7 +7,6 @@ import com.empathai.user.exception.EmpathaiException;
 import com.empathai.user.repository.SchoolRepository;
 import com.empathai.user.repository.StudentRepository;
 import com.empathai.user.repository.UserRepository;
-import com.empathai.assessment.repository.AssessmentResponseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -27,7 +26,6 @@ public class UserService {
     private final StudentRepository studentRepository;
     private final SchoolRepository schoolRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AssessmentResponseRepository assessmentResponseRepository;
 
     // ─────────────────────────────────────────────────────────────
     // CREATE / UPDATE / DELETE
@@ -53,8 +51,6 @@ public class UserService {
                     .dateOfBirth(request.getDateOfBirth())
                     .parentName(request.getParentName())
                     .address(request.getAddress())
-                    .age(request.getAge())
-                    .gender(request.getGender())
                     .build();
         }
 
@@ -96,7 +92,6 @@ public class UserService {
                 s.setParentEmail(request.getParentEmail());
                 s.setRollNo(request.getRollNo());
                 s.setDateOfBirth(request.getDateOfBirth());
-
                 if (request.getAge() != null) s.setAge(request.getAge());
                 s.setParentName(request.getParentName());
                 if (request.getGender() != null) s.setGender(request.getGender());
@@ -153,20 +148,33 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new EmpathaiException("User not found"));
-
-        // If deleting a student, also remove all their assessment responses
-        // (student_id in responses is stored as email or numeric id string)
-        if (user instanceof Student) {
-            assessmentResponseRepository.deleteByStudentId(user.getId());
+        if (!userRepository.existsById(id)) {
+            throw new EmpathaiException("User not found");
         }
-
         userRepository.deleteById(id);
     }
 
     // ─────────────────────────────────────────────────────────────
-    // ROLE-SPECIFIC LIST ENDPOINTS (lean DTOs, no audit fields)
+    // TIME SPENT
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Increments the student's time_spent field by the given seconds.
+     * Called every 60 seconds from the frontend while the student is active.
+     */
+    @Transactional
+    public void incrementTimeSpent(Long studentId, Long seconds) {
+        User user = userRepository.findById(studentId)
+                .orElseThrow(() -> new EmpathaiException("User not found with id: " + studentId));
+        if (user instanceof Student s) {
+            long current = s.getTimeSpent() != null ? s.getTimeSpent() : 0L;
+            s.setTimeSpent(current + seconds);
+            userRepository.save(s);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ROLE-SPECIFIC LIST ENDPOINTS
     // ─────────────────────────────────────────────────────────────
 
     public Page<StudentSummaryResponse> getStudentPage(String school, String search, int page, int size) {
@@ -186,7 +194,7 @@ public class UserService {
                         .name(s.getName())
                         .email(s.getEmail())
                         .username(s.getUsername())
-                        .active(true) // Always true since active field removed
+                        .active(true)
                         .className(s.getClassName())
                         .rollNo(s.getRollNo())
                         .school(s.getSchoolId() != null
@@ -212,7 +220,7 @@ public class UserService {
                             .name(sa.getName())
                             .email(sa.getEmail())
                             .username(sa.getUsername())
-                            .active(true) // Always true since active field removed
+                            .active(true)
                             .schoolId(sa.getSchoolId());
                     if (sa.getSchoolId() != null) {
                         schoolRepository.findById(sa.getSchoolId())
@@ -240,7 +248,7 @@ public class UserService {
                             .email(p.getEmail())
                             .username(p.getUsername())
                             .phoneNumber(p.getPhoneNumber())
-                            .active(true) // Always true since active field removed
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -263,7 +271,7 @@ public class UserService {
                             .email(ca.getEmail())
                             .username(ca.getUsername())
                             .phoneNumber(ca.getPhoneNumber())
-                            .active(true) // Always true since active field removed
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -274,7 +282,7 @@ public class UserService {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // DETAIL / INTERNAL USE — keeps full UserResponse
+    // DETAIL / INTERNAL USE
     // ─────────────────────────────────────────────────────────────
 
     public UserResponse getUserById(Long id) {
@@ -324,7 +332,7 @@ public class UserService {
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .role(user.getRole())
-                .active(true); // Always true since active field removed
+                .active(true);
 
         if (user instanceof SchoolAdmin sa && sa.getSchoolId() != null) {
             builder.schoolId(sa.getSchoolId());
@@ -348,7 +356,11 @@ public class UserService {
                     .dateOfBirth(s.getDateOfBirth())
                     .age(s.getAge())
                     .gender(s.getGender())
-                    .parentName(s.getParentName());
+                    .parentName(s.getParentName())
+                    .loginCount(s.getLoginCount())
+                    .interventionSessionCount(s.getInterventionSessionCount())
+                    .intervention(s.getIntervention())
+                    .timeSpent(s.getTimeSpent());
         }
 
         return builder.build();

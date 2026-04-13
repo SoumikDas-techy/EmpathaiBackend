@@ -16,9 +16,6 @@ import lombok.NoArgsConstructor;
  * List endpoints use role-specific lean DTOs instead:
  *   - StudentSummaryResponse, SchoolAdminResponse,
  *     PsychologistResponse, ContentAdminResponse
- *
- * Audit fields (createdAt, createdBy, updatedAt, updatedBy) removed —
- * these are internal and must never appear in the frontend.
  */
 @Data
 @Builder
@@ -45,4 +42,9 @@ public class UserResponse {
     private String gender;
     private String parentName;
 
+    // Student activity tracking fields
+    private Integer loginCount;
+    private Integer interventionSessionCount;
+    private String intervention;
+    private Long timeSpent;
 }

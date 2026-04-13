@@ -38,12 +38,6 @@ public class UserController {
         );
     }
 
-    /**
-     * GET /api/users/students
-     * Returns Page<StudentSummaryResponse>:
-     *   id, name, email, username, active, school, className, rollNo
-     * Previously returned full UserResponse including audit fields + all student fields.
-     */
     @GetMapping("/students")
     public ResponseEntity<Page<StudentSummaryResponse>> getStudents(
             @RequestParam(required = false) String school,
@@ -53,12 +47,6 @@ public class UserController {
         return ResponseEntity.ok(userService.getStudentPage(school, search, page, size));
     }
 
-    /**
-     * GET /api/users/school-admins
-     * Returns Page<SchoolAdminResponse>:
-     *   id, name, email, username, active, schoolId, school
-     * Previously returned full UserResponse including audit + student-specific fields.
-     */
     @GetMapping("/school-admins")
     public ResponseEntity<Page<SchoolAdminResponse>> getSchoolAdmins(
             @RequestParam(required = false) String search,
@@ -67,12 +55,6 @@ public class UserController {
         return ResponseEntity.ok(userService.getSchoolAdminPage(search, page, size));
     }
 
-    /**
-     * GET /api/users/psychologists
-     * Returns Page<PsychologistResponse>:
-     *   id, name, email, username, phoneNumber, active
-     * Previously returned full UserResponse with null student/school fields.
-     */
     @GetMapping("/psychologists")
     public ResponseEntity<Page<PsychologistResponse>> getPsychologists(
             @RequestParam(required = false) String search,
@@ -81,12 +63,6 @@ public class UserController {
         return ResponseEntity.ok(userService.getPsychologistPage(search, page, size));
     }
 
-    /**
-     * GET /api/users/content-admins
-     * Returns Page<ContentAdminResponse>:
-     *   id, name, email, username, phoneNumber, active
-     * Previously returned full UserResponse with null student/school fields.
-     */
     @GetMapping("/content-admins")
     public ResponseEntity<Page<ContentAdminResponse>> getContentAdmins(
             @RequestParam(required = false) String search,
@@ -95,11 +71,6 @@ public class UserController {
         return ResponseEntity.ok(userService.getContentAdminPage(search, page, size));
     }
 
-    /**
-     * GET /api/users/{id}
-     * Full user detail — used by edit screens.
-     * Returns UserResponse (no audit fields — removed from that DTO).
-     */
     @GetMapping("/{id}")
     public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getUserById(id));
@@ -109,6 +80,22 @@ public class UserController {
     public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
                                                    @RequestBody UserRequest request) {
         return ResponseEntity.ok(userService.updateUser(id, request));
+    }
+
+    /**
+     * PATCH /api/users/{id}/time-spent
+     * Increments student's time_spent by the given seconds.
+     * Called by frontend every 60 seconds while student is active.
+     */
+    @PatchMapping("/{id}/time-spent")
+    public ResponseEntity<Void> updateTimeSpent(
+            @PathVariable Long id,
+            @RequestBody Map<String, Long> body) {
+        Long seconds = body.get("seconds");
+        if (seconds != null && seconds > 0) {
+            userService.incrementTimeSpent(id, seconds);
+        }
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/{id}/reset-password")
