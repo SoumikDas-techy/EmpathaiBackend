@@ -33,16 +33,80 @@ public class RecommendationServiceImpl implements IRecommendationService {
     private final ScheduleTaskRepository scheduleTaskRepository;
     private final StudentRepository studentRepository;
 
-    // ── Weekly fallback subjects confirmed by sir ─────────────────────────────
+    // ── Weekly fallback subjects ───────────────────────────────────────────────
     private static final List<String> WEEKLY_SUBJECTS = List.of(
             "Mathematics", "Science", "SST", "English", "Hindi"
     );
 
-    // ── Default estimated session duration in minutes ─────────────────────────
-    private static final int DEFAULT_SESSION_MINS = 45;
+    // ── Wellness task pool ────────────────────────────────────────────────────
+    private static final List<String> WELLNESS_TASKS = List.of(
+            "Take a short walk",
+            "Stretching & breathing",
+            "Free time / relax",
+            "Drink water & rest",
+            "Light exercise"
+    );
+
+    // ── Other task pool ───────────────────────────────────────────────────────
+    private static final List<String> OTHER_TASKS = List.of(
+            "Organise notes & bag",
+            "Read for 20 minutes",
+            "Prepare for tomorrow",
+            "Tidy your desk & bag",
+            "Plan tomorrow's schedule"
+    );
+
+    // ── Days of week in order (for consecutive-study check) ──────────────────
+    private static final List<String> DAYS_ORDER = List.of(
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+    );
 
     // ─────────────────────────────────────────────────────────────────────────
-    // MAIN METHOD — called by controller on schedule load
+    // CLASS-BASED CAPS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Max single study session (minutes) per class group */
+    private int getMaxSessionMins(String className) {
+        if (className == null) return 45;
+        String lc = className.toLowerCase();
+        if (matchesClass(lc, 1, 4))  return 30;
+        if (matchesClass(lc, 5, 6))  return 45;
+        if (matchesClass(lc, 7, 8))  return 60;
+        if (matchesClass(lc, 9, 10)) return 75;
+        if (matchesClass(lc, 11, 12)) return 90;
+        return 45; // default
+    }
+
+    /** Max total study time per day (minutes) — weekday */
+    private int getMaxDailyStudyMins(String className, boolean isWeekend) {
+        if (className == null) return 120;
+        String lc = className.toLowerCase();
+        if (matchesClass(lc, 1, 2))   return isWeekend ? 90  : 60;
+        if (matchesClass(lc, 3, 4))   return isWeekend ? 120 : 90;
+        if (matchesClass(lc, 5, 6))   return isWeekend ? 180 : 120;
+        if (matchesClass(lc, 7, 8))   return isWeekend ? 240 : 180;
+        if (matchesClass(lc, 9, 10))  return isWeekend ? 300 : 240;
+        if (matchesClass(lc, 11, 12)) return isWeekend ? 360 : 300;
+        return 120;
+    }
+
+    private boolean matchesClass(String lc, int from, int to) {
+        for (int i = from; i <= to; i++) {
+            if (lc.contains(String.valueOf(i))
+                    || lc.contains(i + "st") || lc.contains(i + "nd")
+                    || lc.contains(i + "rd") || lc.contains(i + "th")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isWeekend(String dayOfWeek) {
+        return "Saturday".equalsIgnoreCase(dayOfWeek) || "Sunday".equalsIgnoreCase(dayOfWeek);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MAIN METHOD
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
@@ -51,88 +115,95 @@ public class RecommendationServiceImpl implements IRecommendationService {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new RuntimeException("Student not found: " + studentId));
 
-        Long schoolId = student.getSchoolId();
+        Long schoolId   = student.getSchoolId();
         String className = student.getClassName();
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // DEBUG LOGGING START
-        // ═══════════════════════════════════════════════════════════════════════
-        log.info("═══════════════════════════════════════════════════════════");
-        log.info("🔍 RECOMMENDATIONS REQUEST");
-        log.info("   Student ID: {}", studentId);
-        log.info("   Class Name: '{}'", className);
-        log.info("   School ID: {}", schoolId);
-        log.info("   Day: {}", dayOfWeek);
-        log.info("═══════════════════════════════════════════════════════════");
+        log.info("══════════════════════════════════════════════════════════");
+        log.info("🔍 RECOMMENDATIONS — student={}, class='{}', day={}", studentId, className, dayOfWeek);
 
-        // 1. Blocked windows for this day — filtered by student's class
+        // 1. Blocked windows
         List<SchoolTimingResponse> blockedWindows = getBlockedWindows(schoolId, dayOfWeek, className);
-        log.info("📚 BLOCKED WINDOWS: {} found for {} in class '{}'", blockedWindows.size(), dayOfWeek, className);
-        blockedWindows.forEach(w -> log.info("   - {} to {}", w.getStartTime(), w.getEndTime()));
+        log.info("📚 Blocked windows: {}", blockedWindows.size());
 
-        // 2. Upcoming exams for this student
+        // 2. Upcoming exams
         List<ExamDateResponse> upcomingExams = getUpcomingExams(schoolId, className);
-        log.info("📝 UPCOMING EXAMS: {} found for class '{}'", upcomingExams.size(), className);
-        if (upcomingExams.isEmpty()) {
-            log.warn("   ⚠️  NO EXAMS FOUND - Check database for:");
-            log.warn("       - schoolId = {}", schoolId);
-            log.warn("       - className = '{}'", className);
-            log.warn("       - examDate > {}", LocalDate.now());
-        } else {
-            upcomingExams.forEach(e -> log.info("   - {} exam on {} ({} days, urgency: {})",
-                    e.getSubjectName(), e.getExamDate(), e.getDaysRemaining(), e.getUrgency()));
-        }
+        log.info("📝 Upcoming exams: {}", upcomingExams.size());
 
-        // 3. Student's active goals — read from activities package
+        // 3. Goals
         List<StudentGoal> goals = studentGoalRepository.findByStudentIdAndActiveTrue(studentId);
         Set<String> goalSubjects = goals.stream()
                 .map(StudentGoal::getSubjectTag)
                 .collect(Collectors.toSet());
-        log.info("🎯 ACTIVE GOALS: {} goals found", goalSubjects.size());
-        goalSubjects.forEach(g -> log.info("   - {}", g));
+        log.info("🎯 Goal subjects: {}", goalSubjects);
 
-        // 4. Check which weekly subjects the student has already covered this week
+        // 4. All tasks this week — for covered-subjects check
         List<ScheduleTask> weekTasks = scheduleTaskRepository.findByStudentId(studentId);
         Set<String> coveredSubjects = WEEKLY_SUBJECTS.stream()
                 .filter(subject -> weekTasks.stream()
-                        .anyMatch(t -> t.getTitle() != null &&
-                                t.getTitle().toLowerCase().contains(subject.toLowerCase())))
+                        .anyMatch(t -> t.getTitle() != null
+                                && t.getTitle().toLowerCase().contains(subject.toLowerCase())))
                 .collect(Collectors.toSet());
-        log.info("✅ COVERED THIS WEEK: {} subjects", coveredSubjects.size());
-        coveredSubjects.forEach(s -> log.info("   - {}", s));
 
-        // 5. Generate and rank suggestions
-        List<TaskSuggestion> suggestions = generateSuggestions(upcomingExams, goalSubjects, coveredSubjects);
-        log.info("💡 SUGGESTIONS GENERATED: {} (before today's filter)", suggestions.size());
-        suggestions.forEach(s -> log.info("   - {} (score: {}, reason: '{}')",
-                s.getTitle(), s.getScore(), s.getReasonLabel()));
+        // 5. Today's tasks — for rule checks
+        List<ScheduleTask> todayTasks = scheduleTaskRepository
+                .findByStudentIdAndDayOfWeek(studentId, dayOfWeek);
 
-        // 6. Remove any suggestion whose subject is already scheduled TODAY
-        List<ScheduleTask> todayTasks = scheduleTaskRepository.findByStudentIdAndDayOfWeek(studentId, dayOfWeek);
+        // How many study minutes already scheduled today
+        int todayStudyMins = todayTasks.stream()
+                .filter(t -> "study".equalsIgnoreCase(t.getDetectedType()))
+                .mapToInt(t -> toMins(t.getEndTime()) - toMins(t.getStartTime()))
+                .filter(d -> d > 0)
+                .sum();
+
+        // How many study sessions already today
+        int todayStudySessions = (int) todayTasks.stream()
+                .filter(t -> "study".equalsIgnoreCase(t.getDetectedType()))
+                .count();
+
+        // Whether student already has a wellness task today
+        boolean hasWellnessToday = todayTasks.stream()
+                .anyMatch(t -> "wellness".equalsIgnoreCase(t.getDetectedType()));
+
+        // 6. Consecutive study days (look back up to 3 days before today)
+        int consecutiveStudyDays = countConsecutiveStudyDays(studentId, dayOfWeek, weekTasks);
+        log.info("📊 Today study: {}min, {} sessions | wellness: {} | consecutive days: {}",
+                todayStudyMins, todayStudySessions, hasWellnessToday, consecutiveStudyDays);
+
+        // 7. Class caps
+        int maxSessionMins  = getMaxSessionMins(className);
+        int maxDailyMins    = getMaxDailyStudyMins(className, isWeekend(dayOfWeek));
+        int remainingMins   = Math.max(0, maxDailyMins - todayStudyMins);
+        boolean canAddStudy = todayStudySessions < 3 && remainingMins >= 15;
+        log.info("📏 Class caps — maxSession={}m, maxDaily={}m, remaining={}m, canAddStudy={}",
+                maxSessionMins, maxDailyMins, remainingMins, canAddStudy);
+
+        // 8. Generate suggestions
+        List<TaskSuggestion> suggestions = generateSuggestions(
+                upcomingExams, goalSubjects, coveredSubjects,
+                canAddStudy, hasWellnessToday, consecutiveStudyDays,
+                maxSessionMins, remainingMins, className
+        );
+
+        // 9. Filter out subjects already scheduled today
         Set<String> todaySubjects = todayTasks.stream()
                 .filter(t -> t.getTitle() != null)
                 .flatMap(t -> WEEKLY_SUBJECTS.stream()
                         .filter(s -> t.getTitle().toLowerCase().contains(s.toLowerCase())))
                 .collect(Collectors.toSet());
-        // Also check goal subjects covered today
         goalSubjects.forEach(gs -> todayTasks.stream()
-                .filter(t -> t.getTitle() != null && t.getTitle().toLowerCase().contains(gs.toLowerCase()))
+                .filter(t -> t.getTitle() != null
+                        && t.getTitle().toLowerCase().contains(gs.toLowerCase()))
                 .findFirst()
                 .ifPresent(t -> todaySubjects.add(gs)));
 
-        log.info("🚫 ALREADY SCHEDULED TODAY ({}): {} subjects", dayOfWeek, todaySubjects.size());
-        todaySubjects.forEach(s -> log.info("   - {}", s));
-
         suggestions = suggestions.stream()
-                .filter(s -> !todaySubjects.contains(s.getSubjectName()))
+                .filter(s -> s.getSubjectName() == null || !todaySubjects.contains(s.getSubjectName()))
                 .collect(Collectors.toList());
 
-        log.info("✨ FINAL SUGGESTIONS: {} (after filtering today's tasks)", suggestions.size());
-        suggestions.forEach(s -> log.info("   - {} (reason: '{}')", s.getTitle(), s.getReasonLabel()));
-        log.info("═══════════════════════════════════════════════════════════");
-        // ═══════════════════════════════════════════════════════════════════════
-        // DEBUG LOGGING END
-        // ═══════════════════════════════════════════════════════════════════════
+        log.info("✨ Final suggestions: {}", suggestions.size());
+        suggestions.forEach(s -> log.info("   → {} | {} | {}m",
+                s.getTitle(), s.getReasonLabel(), s.getEstimatedMinutes()));
+        log.info("══════════════════════════════════════════════════════════");
 
         return ScheduleRecommendationResponse.builder()
                 .blockedWindows(blockedWindows)
@@ -142,15 +213,41 @@ public class RecommendationServiceImpl implements IRecommendationService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // CONSECUTIVE STUDY DAYS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Count how many days immediately before today (in the same week list)
+     * had at least one study task.
+     */
+    private int countConsecutiveStudyDays(Long studentId, String dayOfWeek,
+                                          List<ScheduleTask> weekTasks) {
+        int todayIdx = DAYS_ORDER.indexOf(dayOfWeek);
+        if (todayIdx <= 0) return 0;
+
+        int count = 0;
+        for (int i = todayIdx - 1; i >= 0; i--) {
+            String prevDay = DAYS_ORDER.get(i);
+            boolean hadStudy = weekTasks.stream()
+                    .filter(t -> prevDay.equalsIgnoreCase(t.getDayOfWeek()))
+                    .anyMatch(t -> "study".equalsIgnoreCase(t.getDetectedType()));
+            if (hadStudy) count++;
+            else break;
+        }
+        return count;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // BLOCKED WINDOWS
     // ─────────────────────────────────────────────────────────────────────────
 
-    private List<SchoolTimingResponse> getBlockedWindows(Long schoolId, String dayOfWeek, String className) {
+    private List<SchoolTimingResponse> getBlockedWindows(Long schoolId, String dayOfWeek,
+                                                         String className) {
         if (schoolId == null || className == null) return Collections.emptyList();
-
         return schoolTimingRepository.findBySchoolId(schoolId).stream()
                 .filter(t -> t.getDayOfWeek().equalsIgnoreCase(dayOfWeek))
-                .filter(t -> t.getClassName() != null && t.getClassName().equalsIgnoreCase(className))
+                .filter(t -> t.getClassName() != null
+                        && t.getClassName().equalsIgnoreCase(className))
                 .map(t -> SchoolTimingResponse.builder()
                         .id(t.getId())
                         .className(t.getClassName())
@@ -167,23 +264,20 @@ public class RecommendationServiceImpl implements IRecommendationService {
 
     private List<ExamDateResponse> getUpcomingExams(Long schoolId, String className) {
         if (schoolId == null || className == null) return Collections.emptyList();
-
         LocalDate today = LocalDate.now();
-
         return examDateRepository
-                .findBySchoolIdAndClassNameAndExamDateAfterOrderByExamDateAsc(schoolId, className, today)
+                .findBySchoolIdAndClassNameAndExamDateAfterOrderByExamDateAsc(
+                        schoolId, className, today)
                 .stream()
                 .map(e -> {
-                    long daysRemaining = ChronoUnit.DAYS.between(today, e.getExamDate());
-                    String urgency = daysRemaining <= 7 ? "URGENT"
-                            : daysRemaining <= 14 ? "UPCOMING"
-                            : "NORMAL";
+                    long days = ChronoUnit.DAYS.between(today, e.getExamDate());
+                    String urgency = days <= 7 ? "URGENT" : days <= 14 ? "UPCOMING" : "NORMAL";
                     return ExamDateResponse.builder()
                             .id(e.getId())
                             .className(e.getClassName())
                             .subjectName(e.getSubjectName())
                             .examDate(e.getExamDate())
-                            .daysRemaining(daysRemaining)
+                            .daysRemaining(days)
                             .urgency(urgency)
                             .build();
                 })
@@ -192,81 +286,176 @@ public class RecommendationServiceImpl implements IRecommendationService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // SUGGESTION ENGINE
-    // Priority order:
-    //   1. Exam-based  (+50 urgent, +25 upcoming)
-    //   2. Goal-based  (+20)
-    //   3. Weekly rule (all WEEKLY_SUBJECTS get base score +10 as fallback)
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Generates a balanced list of suggestions:
+     *  - Study tasks (exam-based → goal-based → weekly fallback)  — only if canAddStudy
+     *  - Wellness tasks — always recommended if no wellness today, or after 3 study days
+     *  - Other tasks   — always include at least 1–2
+     *
+     * All study suggestions respect maxSessionMins and remainingMins.
+     */
     private List<TaskSuggestion> generateSuggestions(
             List<ExamDateResponse> upcomingExams,
             Set<String> goalSubjects,
-            Set<String> coveredSubjects) {
+            Set<String> coveredSubjects,
+            boolean canAddStudy,
+            boolean hasWellnessToday,
+            int consecutiveStudyDays,
+            int maxSessionMins,
+            int remainingMins,
+            String className) {
 
-        Map<String, TaskSuggestion> suggestionMap = new LinkedHashMap<>();
+        // The session duration we'll suggest — clamped to class max and remaining cap
+        int sessionMins = Math.min(maxSessionMins, Math.max(15, remainingMins));
 
-        // ── Step 1: Seed weekly subjects that are NOT yet covered this week ───
-        for (String subject : WEEKLY_SUBJECTS) {
-            if (coveredSubjects.contains(subject)) continue;
-            TaskSuggestion s = TaskSuggestion.builder()
-                    .title("Study session — " + subject)
-                    .subjectName(subject)
-                    .reasonLabel("Weekly subject")
-                    .estimatedMinutes(DEFAULT_SESSION_MINS)
-                    .score(10)
-                    .build();
-            suggestionMap.put(subject.toLowerCase(), s);
-        }
+        Map<String, TaskSuggestion> studyMap = new LinkedHashMap<>();
 
-        // ── Step 2: Boost based on student goals ──────────────────────────────
-        for (String goalSubject : goalSubjects) {
-            String key = goalSubject.toLowerCase();
-            TaskSuggestion existing = suggestionMap.get(key);
-            if (existing != null) {
-                existing.setScore(existing.getScore() + 20);
-                existing.setReasonLabel("Matches your goal");
-            } else {
-                suggestionMap.put(key, TaskSuggestion.builder()
-                        .title("Study session — " + goalSubject)
-                        .subjectName(goalSubject)
-                        .reasonLabel("Matches your goal")
-                        .estimatedMinutes(DEFAULT_SESSION_MINS)
-                        .score(20)
+        // ── STUDY: Step 1 — weekly subjects not yet covered ──────────────────
+        if (canAddStudy) {
+            for (String subject : WEEKLY_SUBJECTS) {
+                if (coveredSubjects.contains(subject)) continue;
+                studyMap.put(subject.toLowerCase(), TaskSuggestion.builder()
+                        .title("Study session — " + subject)
+                        .subjectName(subject)
+                        .reasonLabel("Weekly subject")
+                        .estimatedMinutes(sessionMins)
+                        .taskType("STUDY")
+                        .score(10)
                         .build());
+            }
+
+            // ── STUDY: Step 2 — boost for goals ──────────────────────────────
+            for (String gs : goalSubjects) {
+                String key = gs.toLowerCase();
+                TaskSuggestion existing = studyMap.get(key);
+                if (existing != null) {
+                    existing.setScore(existing.getScore() + 20);
+                    existing.setReasonLabel("Matches your goal");
+                } else {
+                    studyMap.put(key, TaskSuggestion.builder()
+                            .title("Study session — " + gs)
+                            .subjectName(gs)
+                            .reasonLabel("Matches your goal")
+                            .estimatedMinutes(sessionMins)
+                            .taskType("STUDY")
+                            .score(20)
+                            .build());
+                }
+            }
+
+            // ── STUDY: Step 2b — homework as study task when exams upcoming ─────
+            if (!upcomingExams.isEmpty()) {
+                String hwKey = "homework";
+                if (!studyMap.containsKey(hwKey)) {
+                    studyMap.put(hwKey, TaskSuggestion.builder()
+                            .title("Complete homework")
+                            .subjectName("Homework")
+                            .reasonLabel("Exam preparation")
+                            .estimatedMinutes(sessionMins)
+                            .taskType("STUDY")
+                            .score(15)
+                            .build());
+                }
+            }
+
+            // ── STUDY: Step 3 — boost for upcoming exams (highest priority) ──
+            for (ExamDateResponse exam : upcomingExams) {
+                String key = exam.getSubjectName().toLowerCase();
+                int boost = "URGENT".equals(exam.getUrgency()) ? 50 : 25;
+                String label = "Exam in " + exam.getDaysRemaining() + " day"
+                        + (exam.getDaysRemaining() == 1 ? "" : "s");
+                TaskSuggestion existing = studyMap.get(key);
+                if (existing != null) {
+                    existing.setScore(existing.getScore() + boost);
+                    existing.setReasonLabel(label);
+                    existing.setTitle("Revise — " + exam.getSubjectName());
+                } else {
+                    studyMap.put(key, TaskSuggestion.builder()
+                            .title("Revise — " + exam.getSubjectName())
+                            .subjectName(exam.getSubjectName())
+                            .reasonLabel(label)
+                            .estimatedMinutes(sessionMins)
+                            .taskType("STUDY")
+                            .score(boost)
+                            .build());
+                }
             }
         }
 
-        // ── Step 3: Boost based on upcoming exams (highest priority) ──────────
-        for (ExamDateResponse exam : upcomingExams) {
-            String key = exam.getSubjectName().toLowerCase();
-            int boost = "URGENT".equals(exam.getUrgency()) ? 50 : 25;
-            String label = "Exam in " + exam.getDaysRemaining() + " day"
-                    + (exam.getDaysRemaining() == 1 ? "" : "s");
+        // Top study suggestions (max 5)
+        List<TaskSuggestion> result = new ArrayList<>(
+                studyMap.values().stream()
+                        .sorted(Comparator.comparingInt(TaskSuggestion::getScore).reversed())
+                        .limit(5)
+                        .collect(Collectors.toList())
+        );
 
-            TaskSuggestion existing = suggestionMap.get(key);
-            if (existing != null) {
-                existing.setScore(existing.getScore() + boost);
-                existing.setReasonLabel(label);
-            } else {
-                suggestionMap.put(key, TaskSuggestion.builder()
-                        .title("Revise — " + exam.getSubjectName())
-                        .subjectName(exam.getSubjectName())
-                        .reasonLabel(label)
-                        .estimatedMinutes(DEFAULT_SESSION_MINS)
-                        .score(boost)
-                        .build());
-            }
+        // ── WELLNESS suggestions ──────────────────────────────────────────────
+        // Always suggest at least 1 wellness if no wellness today
+        // Suggest 2 if student has 3 consecutive study days
+        int wellnessCount = hasWellnessToday ? 0 : (consecutiveStudyDays >= 3 ? 2 : 1);
+
+        List<String> wellnessPool = new ArrayList<>(WELLNESS_TASKS);
+        Collections.shuffle(wellnessPool);
+        for (int i = 0; i < Math.min(wellnessCount, wellnessPool.size()); i++) {
+            String reason = consecutiveStudyDays >= 3
+                    ? "3 study days in a row — rest up!"
+                    : "Stay balanced";
+            result.add(TaskSuggestion.builder()
+                    .title(wellnessPool.get(i))
+                    .subjectName(null)
+                    .reasonLabel(reason)
+                    .estimatedMinutes(20)
+                    .taskType("WELLNESS")
+                    .score(consecutiveStudyDays >= 3 ? 40 : 15)
+                    .build());
         }
 
-        // ── Step 4: Sort by score descending, return top 10 ──────────────────
-        return suggestionMap.values().stream()
-                .sorted(Comparator.comparingInt(TaskSuggestion::getScore).reversed())
-                .limit(10)
-                .collect(Collectors.toList());
+        // ── OTHER suggestions ────────────────────────────────────────────────
+        // Always add 1–2 "other" tasks (homework, organisation, etc.)
+        // If there are upcoming exams → add a homework/revision reminder
+        List<String> otherPool = new ArrayList<>(OTHER_TASKS);
+        Collections.shuffle(otherPool);
+
+        int otherCount = 1;
+        if (!upcomingExams.isEmpty()) otherCount = 2; // extra reminder near exams
+
+        for (int i = 0; i < Math.min(otherCount, otherPool.size()); i++) {
+            result.add(TaskSuggestion.builder()
+                    .title(otherPool.get(i))
+                    .subjectName(null)
+                    .reasonLabel("Daily routine")
+                    .estimatedMinutes(30)
+                    .taskType("OTHER")
+                    .score(8)
+                    .build());
+        }
+
+        // ── If canAddStudy is false, still show a soft note ──────────────────
+        if (!canAddStudy && result.stream().noneMatch(s -> "STUDY".equals(s.getTaskType()))) {
+            // Put wellness/other at top since study cap reached
+            result.sort(Comparator.comparingInt(TaskSuggestion::getScore).reversed());
+        }
+
+        // Sort all by score desc and cap at 8 total suggestions
+        result.sort(Comparator.comparingInt(TaskSuggestion::getScore).reversed());
+        return result.stream().limit(8).collect(Collectors.toList());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ADMIN: Save school timings (replaces existing for that school)
+    // HELPER
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private int toMins(String time) {
+        if (time == null || !time.contains(":")) return 0;
+        String[] parts = time.split(":");
+        return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADMIN: School timings
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
@@ -323,14 +512,14 @@ public class RecommendationServiceImpl implements IRecommendationService {
                 .examDate(request.getExamDate())
                 .build());
 
-        long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), saved.getExamDate());
+        long days = ChronoUnit.DAYS.between(LocalDate.now(), saved.getExamDate());
         return ExamDateResponse.builder()
                 .id(saved.getId())
                 .className(saved.getClassName())
                 .subjectName(saved.getSubjectName())
                 .examDate(saved.getExamDate())
-                .daysRemaining(daysRemaining)
-                .urgency(daysRemaining <= 7 ? "URGENT" : daysRemaining <= 14 ? "UPCOMING" : "NORMAL")
+                .daysRemaining(days)
+                .urgency(days <= 7 ? "URGENT" : days <= 14 ? "UPCOMING" : "NORMAL")
                 .build();
     }
 

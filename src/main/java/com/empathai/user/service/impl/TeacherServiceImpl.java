@@ -4,6 +4,7 @@ import com.empathai.user.dto.teacher.TeacherRequest;
 import com.empathai.user.dto.teacher.TeacherResponse;
 import com.empathai.user.entity.School;
 import com.empathai.user.entity.Teacher;
+import com.empathai.user.repository.SchoolClassRepository;
 import com.empathai.user.exception.EmpathaiException;
 import com.empathai.user.repository.SchoolRepository;
 import com.empathai.user.repository.TeacherRepository;
@@ -28,15 +29,29 @@ public class TeacherServiceImpl implements TeacherService {
     private final TeacherRepository teacherRepository;
     private final SchoolRepository  schoolRepository;
     private final PasswordEncoder   passwordEncoder;
-
+    private final SchoolClassRepository schoolClassRepository;
     // ── helpers ──────────────────────────────────────────────────────────────
-
     private String listToCsv(List<String> list) {
         if (list == null || list.isEmpty()) return null;
         return list.stream()
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .collect(Collectors.joining(","));
+    }
+
+    private String intListToCsv(List<Integer> list) {
+        if (list == null || list.isEmpty()) return null;
+        return list.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+    private List<Integer> csvToIntList(String csv) {
+        if (csv == null || csv.isBlank()) return Collections.emptyList();
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .map(Integer::parseInt)
+                .collect(Collectors.toList());
     }
 
     private List<String> csvToList(String csv) {
@@ -74,9 +89,13 @@ public class TeacherServiceImpl implements TeacherService {
                 .phoneNumber(t.getPhoneNumber())
                 .active(true) // Always true since active field removed from User
                 .subjects(csvToList(t.getSubjects()))
-                .classesCovered(csvToList(t.getClassesCovered()))
+                .classesCovered(csvToIntList(t.getClassesCovered()))
                 .schoolId(t.getSchoolId())
                 .school(schoolName)
+                .createdAt(t.getCreatedAt())
+                .createdBy(t.getCreatedBy())
+                .updatedAt(t.getUpdatedAt())
+                .updatedBy(t.getUpdatedBy())
                 .build();
     }
 
@@ -92,7 +111,7 @@ public class TeacherServiceImpl implements TeacherService {
         t.setUsername(request.getEmail());
         t.setPhoneNumber(request.getPhoneNumber());
         t.setSubjects(listToCsv(request.getSubjects()));
-        t.setClassesCovered(listToCsv(request.getClassesCovered()));
+        t.setClassesCovered(intListToCsv(request.getClassesCovered()));
         t.setSchoolId(resolveSchoolId(request));
         return toResponse(teacherRepository.save(t));
     }
@@ -112,7 +131,7 @@ public class TeacherServiceImpl implements TeacherService {
         if (request.getSubjects() != null)
             t.setSubjects(listToCsv(request.getSubjects()));
         if (request.getClassesCovered() != null)
-            t.setClassesCovered(listToCsv(request.getClassesCovered()));
+            t.setClassesCovered(intListToCsv(request.getClassesCovered()));
         Long sid = resolveSchoolId(request);
         if (sid != null) t.setSchoolId(sid);
 
