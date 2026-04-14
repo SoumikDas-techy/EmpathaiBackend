@@ -40,28 +40,38 @@ public class WebSecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
 
-                        // Allow preflight
+                        // Allow preflight OPTIONS requests
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Public endpoints
+                        // Public authentication & set-password endpoints
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/validate-token").permitAll()
+                        .requestMatchers("/api/auth/set-password").permitAll()
+
+                        // Public endpoints
                         .requestMatchers("/api/public/**").permitAll()
 
-                        // Assessment endpoints
+                        // Assessment & Group related
                         .requestMatchers(HttpMethod.GET, "/api/groups/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/groups/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/responses").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/responses/**").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/api/**").authenticated()
+
+                        // Questions
                         .requestMatchers(HttpMethod.GET, "/api/questions/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/questions/**")
                         .hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/questions/**").authenticated()
 
-                        // Teachers: accessible only by SUPER_ADMIN and SCHOOL_ADMIN
-                        .requestMatchers("/api/teachers/**").hasAnyRole("SUPER_ADMIN", "SCHOOL_ADMIN")
+                        // Delete operations (restricted)
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").authenticated()
 
-                        // Everything else must be authenticated (controller @PreAuthorize will enforce roles)
+                        // Teachers management - only SUPER_ADMIN and SCHOOL_ADMIN
+                        .requestMatchers("/api/teachers/**")
+                        .hasAnyRole("SUPER_ADMIN", "SCHOOL_ADMIN")
+
+                        // Everything else requires authentication
+                        // (Fine-grained role checks should be done with @PreAuthorize in controllers)
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)
