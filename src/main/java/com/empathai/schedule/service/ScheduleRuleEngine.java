@@ -27,10 +27,16 @@ public class ScheduleRuleEngine {
 
     // ── Keywords that identify a task as a STUDY task ─────────────────────────
     private static final List<String> STUDY_KEYWORDS = Arrays.asList(
-            "study", "revision", "revise", "homework", "class", "reading", "read",
-            "math", "maths", "science", "english", "history", "geography", "physics",
-            "chemistry", "biology", "exam", "test", "assignment", "notes", "lecture",
-            "chapter", "practice", "exercise", "worksheet", "project", "essay", "writing"
+            // Core study actions
+            "study", "revision", "revise", "session",
+            // Subject names
+            "math", "maths", "mathematics", "science", "english", "hindi", "sst",
+            "history", "geography", "physics", "chemistry", "biology", "computer",
+            // Academic tasks
+            "exam", "test", "assignment", "lecture", "chapter", "worksheet", "essay",
+            "homework",
+            // Note-taking (specific phrases — "organise notes" is OTHER, "make notes"/"read notes" is STUDY)
+            "make notes", "read notes", "write notes", "study notes", "take notes"
     );
 
     private static final List<String> WEEKEND_DAYS = Arrays.asList("Saturday", "Sunday");
@@ -417,9 +423,17 @@ public class ScheduleRuleEngine {
         String lower = title.toLowerCase();
         if (STUDY_KEYWORDS.stream().anyMatch(lower::contains)) return "STUDY";
         List<String> wellnessKeywords = List.of(
-                "gym", "yoga", "walk", "run", "jog", "meal", "lunch", "dinner",
-                "breakfast", "sleep", "nap", "meditation", "meditate", "exercise",
-                "workout", "sport", "swim", "cycle", "rest", "break", "relax");
+                // Physical activity
+                "gym", "yoga", "walk", "run", "jog", "exercise", "workout", "sport",
+                "swim", "cycle", "stretch",
+                // Rest & recovery — matches AI suggestion titles
+                "sleep", "nap", "rest", "break", "relax", "free time",
+                // Mindfulness
+                "meditation", "meditate", "breathing",
+                // Meals
+                "meal", "lunch", "dinner", "breakfast",
+                // Water
+                "drink water");
         if (wellnessKeywords.stream().anyMatch(lower::contains)) return "WELLNESS";
         return "OTHER";
     }
