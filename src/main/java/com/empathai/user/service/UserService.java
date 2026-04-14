@@ -134,7 +134,7 @@ public class UserService {
                 s.setRollNo(request.getRollNo());
                 s.setDateOfBirth(request.getDateOfBirth());
                 s.setParentName(request.getParentName());
-                s.setGender(request.getGender());   // ✅ FIX 3: gender saved to DB
+                s.setGender(request.getGender());   // ✅ gender saved to DB
                 user = s;
 
                 user.setUsername(request.getUsername());
@@ -231,6 +231,7 @@ public class UserService {
     public void incrementTimeSpent(Long id, Long seconds) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EmpathaiException("User not found with id: " + id));
+
         if (user instanceof Student s) {
             long current = s.getTimeSpent() != null ? s.getTimeSpent() : 0L;
             s.setTimeSpent(current + seconds);
@@ -242,15 +243,19 @@ public class UserService {
     public int incrementInterventionAndAwardBadges(Long id, String activityType) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EmpathaiException("User not found with id: " + id));
+
         if (!(user instanceof Student s)) {
             throw new EmpathaiException("User is not a student", "INVALID_ROLE");
         }
+
         int current = s.getInterventionSessionCount() != null ? s.getInterventionSessionCount() : 0;
         int newCount = current + 1;
         s.setInterventionSessionCount(newCount);
+
         if (activityType != null && !activityType.isBlank()) {
             s.setIntervention(activityType);
         }
+
         studentRepository.save(s);
         return newCount;
     }
@@ -267,16 +272,21 @@ public class UserService {
                 .filter(s -> {
                     if (school == null) return true;
                     String schoolName = s.getSchoolId() != null
-                            ? schoolNameById.getOrDefault(s.getSchoolId(), "") : "";
+                            ? schoolNameById.getOrDefault(s.getSchoolId(), "")
+                            : "";
                     return school.equals(schoolName);
                 })
                 .filter(s -> search == null
                         || (s.getName() != null && s.getName().toLowerCase().contains(search.toLowerCase()))
                         || (s.getEmail() != null && s.getEmail().toLowerCase().contains(search.toLowerCase())))
                 .map(s -> StudentSummaryResponse.builder()
-                        .id(s.getId()).name(s.getName()).email(s.getEmail())
-                        .username(s.getUsername()).active(Boolean.TRUE.equals(s.getActive()))
-                        .className(s.getClassName()).rollNo(s.getRollNo())
+                        .id(s.getId())
+                        .name(s.getName())
+                        .email(s.getEmail())
+                        .username(s.getUsername())
+                        .active(Boolean.TRUE.equals(s.getActive()))
+                        .className(s.getClassName())
+                        .rollNo(s.getRollNo())
                         .school(s.getSchoolId() != null ? schoolNameById.get(s.getSchoolId()) : null)
                         .build())
                 .collect(Collectors.toList());
@@ -297,12 +307,16 @@ public class UserService {
                 .map(u -> {
                     SchoolAdmin sa = (SchoolAdmin) u;
                     return SchoolAdminResponse.builder()
-                            .id(sa.getId()).name(sa.getName()).email(sa.getEmail())
-                            .username(sa.getUsername()).active(Boolean.TRUE.equals(sa.getActive()))
+                            .id(sa.getId())
+                            .name(sa.getName())
+                            .email(sa.getEmail())
+                            .username(sa.getUsername())
+                            .active(Boolean.TRUE.equals(sa.getActive()))
                             .schoolId(sa.getSchoolId())
                             .school(sa.getSchoolId() != null ? schoolNameById.get(sa.getSchoolId()) : null)
                             .build();
-                }).collect(Collectors.toList());
+                })
+                .collect(Collectors.toList());
 
         int start = Math.min(page * size, all.size());
         int end = Math.min(start + size, all.size());
@@ -317,10 +331,15 @@ public class UserService {
                 .map(u -> {
                     Psychologist p = (Psychologist) u;
                     return PsychologistResponse.builder()
-                            .id(p.getId()).name(p.getName()).email(p.getEmail())
-                            .username(p.getUsername()).phoneNumber(p.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(p.getActive())).build();
-                }).collect(Collectors.toList());
+                            .id(p.getId())
+                            .name(p.getName())
+                            .email(p.getEmail())
+                            .username(p.getUsername())
+                            .phoneNumber(p.getPhoneNumber())
+                            .active(Boolean.TRUE.equals(p.getActive()))
+                            .build();
+                })
+                .collect(Collectors.toList());
 
         int start = Math.min(page * size, all.size());
         int end = Math.min(start + size, all.size());
@@ -335,10 +354,15 @@ public class UserService {
                 .map(u -> {
                     ContentAdmin ca = (ContentAdmin) u;
                     return ContentAdminResponse.builder()
-                            .id(ca.getId()).name(ca.getName()).email(ca.getEmail())
-                            .username(ca.getUsername()).phoneNumber(ca.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(ca.getActive())).build();
-                }).collect(Collectors.toList());
+                            .id(ca.getId())
+                            .name(ca.getName())
+                            .email(ca.getEmail())
+                            .username(ca.getUsername())
+                            .phoneNumber(ca.getPhoneNumber())
+                            .active(Boolean.TRUE.equals(ca.getActive()))
+                            .build();
+                })
+                .collect(Collectors.toList());
 
         int start = Math.min(page * size, all.size());
         int end = Math.min(start + size, all.size());
@@ -357,17 +381,20 @@ public class UserService {
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
-                .map(this::mapToFullResponse).collect(Collectors.toList());
+                .map(this::mapToFullResponse)
+                .collect(Collectors.toList());
     }
 
     public List<UserResponse> getUsersByRole(UserRole role) {
         if (role == UserRole.STUDENT) {
             return studentRepository.findAll().stream()
-                    .map(this::mapToFullResponse).collect(Collectors.toList());
+                    .map(this::mapToFullResponse)
+                    .collect(Collectors.toList());
         }
         return userRepository.findAll().stream()
                 .filter(u -> u.getRole() == role)
-                .map(this::mapToFullResponse).collect(Collectors.toList());
+                .map(this::mapToFullResponse)
+                .collect(Collectors.toList());
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -375,31 +402,44 @@ public class UserService {
     // ─────────────────────────────────────────────────────────────
 
     private Long resolveSchoolId(UserRequest request) {
-        if (request.getSchoolId() != null) return request.getSchoolId();
+        if (request.getSchoolId() != null) {
+            return request.getSchoolId();
+        }
         if (request.getSchool() != null && !request.getSchool().isBlank()) {
             return schoolRepository.findByName(request.getSchool())
-                    .map(School::getId).orElse(null);
+                    .map(School::getId)
+                    .orElse(null);
         }
         return null;
     }
 
     public UserResponse mapToFullResponse(User user) {
         UserResponse.UserResponseBuilder builder = UserResponse.builder()
-                .id(user.getId()).name(user.getName()).email(user.getEmail())
-                .username(user.getUsername()).role(user.getRole())
+                .id(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .username(user.getUsername())
+                .role(user.getRole())
                 .active(Boolean.TRUE.equals(user.getActive()));
 
         if (user instanceof SchoolAdmin sa && sa.getSchoolId() != null) {
             builder.schoolId(sa.getSchoolId());
             schoolRepository.findById(sa.getSchoolId())
                     .ifPresent(s -> builder.school(s.getName()));
+
         } else if (user instanceof Psychologist p) {
             builder.phoneNumber(p.getPhoneNumber());
+
         } else if (user instanceof ContentAdmin ca) {
             builder.phoneNumber(ca.getPhoneNumber());
-        } else if (user instanceof Student s && s.getSchoolId() != null) {
-            builder.schoolId(s.getSchoolId())
-                    .rollNo(s.getRollNo())
+
+        } else if (user instanceof Student s) {
+            if (s.getSchoolId() != null) {
+                builder.schoolId(s.getSchoolId());
+                schoolRepository.findById(s.getSchoolId())
+                        .ifPresent(sc -> builder.school(sc.getName()));
+            }
+            builder.rollNo(s.getRollNo())
                     .className(s.getClassName())
                     .section(s.getSection())
                     .phoneNumber(s.getPhoneNumber())
@@ -411,8 +451,6 @@ public class UserService {
                     .interventionSessionCount(s.getInterventionSessionCount())
                     .intervention(s.getIntervention())
                     .timeSpent(s.getTimeSpent());
-            schoolRepository.findById(s.getSchoolId())
-                    .ifPresent(sc -> builder.school(sc.getName()));
         }
 
         return builder.build();
