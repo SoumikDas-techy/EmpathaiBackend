@@ -95,9 +95,6 @@ public class UserService {
             }
 
             case STUDENT -> {
-                // Students do NOT set a password during admin creation.
-                // A secure random temp password is stored so the account is valid in DB.
-                // The student receives an email with a one-time link to set their real password.
                 String tempPassword = passwordEncoder.encode(UUID.randomUUID().toString());
                 Student s = new Student(request.getEmail(), tempPassword, request.getName());
                 s.setSchoolId(schoolId);
@@ -117,7 +114,6 @@ public class UserService {
         user.setUsername(request.getUsername());
         User savedUser = userRepository.save(user);
 
-        // Send password setup email for students only
         if (savedUser.getRole() == UserRole.STUDENT) {
             emailService.sendPasswordSetupEmail(savedUser);
         }
@@ -176,17 +172,8 @@ public class UserService {
 
     // ─────────────────────────────────────────────────────────────
     // STUDENT ACTIVITY TRACKING
-    // FIX: These two methods were called by UserController but were
-    // missing from UserService, causing the build to fail with
-    // "cannot find symbol: method incrementTimeSpent" and
-    // "cannot find symbol: method incrementInterventionAndAwardBadges"
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * PATCH /api/users/{id}/time-spent
-     * Adds the given number of seconds to the student's total
-     * time spent on the platform.
-     */
     @Transactional
     public void incrementTimeSpent(Long id, Long seconds) {
         User user = userRepository.findById(id)
@@ -197,14 +184,8 @@ public class UserService {
             s.setTimeSpent(current + seconds);
             studentRepository.save(s);
         }
-        // Silently ignore for non-student roles
     }
 
-    /**
-     * POST /api/users/{id}/intervention-complete
-     * Increments the student's interventionSessionCount by 1 and
-     * stores the activity type. Returns the new session count.
-     */
     @Transactional
     public int incrementInterventionAndAwardBadges(Long id, String activityType) {
         User user = userRepository.findById(id)
@@ -250,7 +231,7 @@ public class UserService {
                         .name(s.getName())
                         .email(s.getEmail())
                         .username(s.getUsername())
-                        .active(Boolean.TRUE.equals(s.getActive()))
+                        .active(true)
                         .className(s.getClassName())
                         .rollNo(s.getRollNo())
                         .school(s.getSchoolId() != null ? schoolNameById.get(s.getSchoolId()) : null)
@@ -277,7 +258,7 @@ public class UserService {
                             .name(sa.getName())
                             .email(sa.getEmail())
                             .username(sa.getUsername())
-                            .active(Boolean.TRUE.equals(sa.getActive()))
+                            .active(true)
                             .schoolId(sa.getSchoolId())
                             .school(sa.getSchoolId() != null ? schoolNameById.get(sa.getSchoolId()) : null)
                             .build();
@@ -302,7 +283,7 @@ public class UserService {
                             .email(p.getEmail())
                             .username(p.getUsername())
                             .phoneNumber(p.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(p.getActive()))
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -325,7 +306,7 @@ public class UserService {
                             .email(ca.getEmail())
                             .username(ca.getUsername())
                             .phoneNumber(ca.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(ca.getActive()))
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -386,27 +367,36 @@ public class UserService {
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .role(user.getRole())
-                .active(Boolean.TRUE.equals(user.getActive()));
+                .active(true);
 
         if (user instanceof SchoolAdmin sa && sa.getSchoolId() != null) {
             builder.schoolId(sa.getSchoolId());
             schoolRepository.findById(sa.getSchoolId())
                     .ifPresent(s -> builder.school(s.getName()));
+
         } else if (user instanceof Psychologist p) {
             builder.phoneNumber(p.getPhoneNumber());
+
         } else if (user instanceof ContentAdmin ca) {
             builder.phoneNumber(ca.getPhoneNumber());
-        } else if (user instanceof Student s && s.getSchoolId() != null) {
-            builder.schoolId(s.getSchoolId())
-                    .rollNo(s.getRollNo())
+
+        } else if (user instanceof Student s) {
+            if (s.getSchoolId() != null) {
+                builder.schoolId(s.getSchoolId());
+                schoolRepository.findById(s.getSchoolId())
+                        .ifPresent(sc -> builder.school(sc.getName()));
+            }
+            builder.rollNo(s.getRollNo())
                     .className(s.getClassName())
                     .section(s.getSection())
                     .phoneNumber(s.getPhoneNumber())
                     .parentEmail(s.getParentEmail())
                     .dateOfBirth(s.getDateOfBirth())
-                    .parentName(s.getParentName());
-            schoolRepository.findById(s.getSchoolId())
-                    .ifPresent(sc -> builder.school(sc.getName()));
+                    .parentName(s.getParentName())
+                    // ── KEY FIX: these 3 fields were missing ──────────────
+                    .loginCount(s.getLoginCount())
+                    .interventionSessionCount(s.getInterventionSessionCount())
+                    .timeSpent(s.getTimeSpent());
         }
 
         return builder.build();
