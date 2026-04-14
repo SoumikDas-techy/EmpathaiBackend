@@ -29,8 +29,15 @@ public class StudentDetailResponse {
     private String school;
     private String className;
     private String section;
-    private String bloodGroup;
     private String rollNo;
     private String dateOfBirth;
-    private String address;
+
+    // ✅ FIX 3: gender added so it shows in the expanded row
+    private String gender;
+
+    // ✅ Activity tracking fields — needed for expanded row display
+    private Integer loginCount;
+    private Integer interventionSessionCount;
+    private String intervention;
+    private Long timeSpent;
 }

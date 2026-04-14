@@ -84,17 +84,21 @@ public class SchoolService {
                         .phoneNumber(s.getPhoneNumber())
                         .parentEmail(s.getParentEmail())
                         .parentName(s.getParentName())
-                        .active(true) // Always true since active field removed
+                        .active(true)
                         .schoolId(s.getSchoolId())
                         .school(schoolName)
                         .className(s.getClassName())
                         .section(s.getSection())
                         .rollNo(s.getRollNo())
                         .dateOfBirth(s.getDateOfBirth())
+                        .gender(s.getGender())
+                        .loginCount(s.getLoginCount())
+                        .interventionSessionCount(s.getInterventionSessionCount())
+                        .intervention(s.getIntervention())
+                        .timeSpent(s.getTimeSpent())
                         .build())
                 .collect(Collectors.toList());
     }
-
     public SchoolResponse getSchoolById(Long id) {
         School school = schoolRepository.findById(id)
                 .orElseThrow(() -> new EmpathaiException("School not found with id: " + id));
