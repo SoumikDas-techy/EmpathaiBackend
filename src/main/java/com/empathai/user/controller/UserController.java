@@ -30,6 +30,7 @@ public class UserController {
     public ResponseEntity<UserResponse> getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String principal = auth.getName();
+
         return ResponseEntity.ok(
                 userService.getAllUsers().stream()
                         .filter(u -> principal.equals(u.getEmail()) || principal.equals(u.getUsername()))

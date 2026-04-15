@@ -22,36 +22,32 @@ public class UserRequest {
     @Email(message = "Invalid email format")
     private String email;
 
-    // Optional — defaults to email in UserService if not provided
     private String username;
 
-    // Optional on update — UserService skips encoding if blank
     private String password;
 
     private String phoneNumber;
-
     private String parentEmail;
 
     @NotNull(message = "Role is required")
     private UserRole role;
 
-    // Role-specific optional fields
     private Long schoolId;
-
-    // Frontend may send school as a name string instead of ID
     private String school;
 
-
     private String className;
-
     private String section;
     private String bloodGroup;
-
     private String rollNo;
-
     private String dateOfBirth;
     private Integer age;
     private String gender;
     private String parentName;
     private String address;
+
+    // === Tracking fields (used by admin panel and activity tracking) ===
+    private Integer loginCount;
+    private Integer interventionSessionCount;
+    private Long timeSpent;
+    private String intervention;
 }

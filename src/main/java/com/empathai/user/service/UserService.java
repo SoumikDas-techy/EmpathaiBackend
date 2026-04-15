@@ -30,9 +30,9 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
 
-    // ─────────────────────────────────────────────────────────────
-    // CREATE / UPDATE / DELETE
-    // ─────────────────────────────────────────────────────────────
+    // ===================================================================
+    // CREATE USER
+    // ===================================================================
 
     @Transactional
     public UserResponse createUser(UserRequest request) {
@@ -52,7 +52,7 @@ public class UserService {
                     .rollNo(request.getRollNo())
                     .dateOfBirth(request.getDateOfBirth())
                     .parentName(request.getParentName())
-                    .gender(request.getGender())   // ✅ gender included in rebuild
+                    .gender(request.getGender())
                     .build();
         }
 
@@ -66,61 +66,41 @@ public class UserService {
         }
 
         User user;
+        boolean sendEmailInvite = false;
 
         switch (request.getRole()) {
-
             case SUPER_ADMIN -> {
-                String encodedPassword = passwordEncoder.encode(request.getPassword());
-                user = new SuperAdmin(request.getEmail(), encodedPassword, request.getName());
+                user = new SuperAdmin(request.getEmail(), passwordEncoder.encode(request.getPassword()), request.getName());
             }
-
             case CONTENT_ADMIN -> {
-                String encodedPassword = passwordEncoder.encode(request.getPassword());
-                ContentAdmin ca = new ContentAdmin(request.getEmail(), encodedPassword, request.getName());
+                ContentAdmin ca = new ContentAdmin(request.getEmail(), passwordEncoder.encode(request.getPassword()), request.getName());
                 if (request.getPhoneNumber() != null) ca.setPhoneNumber(request.getPhoneNumber());
                 user = ca;
             }
-
             case PSYCHOLOGIST -> {
-                String encodedPassword = passwordEncoder.encode(request.getPassword());
-                Psychologist p = new Psychologist(request.getEmail(), encodedPassword, request.getName());
+                Psychologist p = new Psychologist(request.getEmail(), passwordEncoder.encode(request.getPassword()), request.getName());
                 if (request.getPhoneNumber() != null) p.setPhoneNumber(request.getPhoneNumber());
                 user = p;
             }
-
             case SCHOOL_ADMIN -> {
-                String encodedPassword = passwordEncoder.encode(request.getPassword());
-                SchoolAdmin sa = new SchoolAdmin(request.getEmail(), encodedPassword, request.getName());
+                SchoolAdmin sa = new SchoolAdmin(request.getEmail(), passwordEncoder.encode(request.getPassword()), request.getName());
                 sa.setSchoolId(schoolId);
                 user = sa;
             }
-
             case TEACHER -> {
-                String encodedPassword = passwordEncoder.encode(request.getPassword());
-                Teacher t = new Teacher(request.getEmail(), encodedPassword, request.getName());
+                Teacher t = new Teacher(request.getEmail(), passwordEncoder.encode(request.getPassword()), request.getName());
                 if (request.getPhoneNumber() != null) t.setPhoneNumber(request.getPhoneNumber());
-                if (request.getSchoolId() != null) t.setSchoolId(request.getSchoolId());
-                else if (schoolId != null) t.setSchoolId(schoolId);
+                if (schoolId != null) t.setSchoolId(schoolId);
                 user = t;
             }
-
             case STUDENT -> {
-                // ── REQUIREMENT 1 ──────────────────────────────────────────────────
-                // HR wants BOTH options during development:
-                //   A) If admin provides a password → use it (old behaviour)
-                //   B) If admin leaves password blank → generate temp + send MFA email
-                // This lets multiple students be created with manual passwords AND
-                // still supports the email-invite flow when no password is given.
                 String rawPassword = request.getPassword();
                 String encodedPassword;
-                boolean sendEmailInvite;
 
                 if (rawPassword != null && !rawPassword.isBlank()) {
-                    // Admin supplied a password — use it directly, no email needed
                     encodedPassword = passwordEncoder.encode(rawPassword);
                     sendEmailInvite = false;
                 } else {
-                    // No password supplied — generate temp, send MFA invite email
                     encodedPassword = passwordEncoder.encode(UUID.randomUUID().toString());
                     sendEmailInvite = true;
                 }
@@ -134,41 +114,37 @@ public class UserService {
                 s.setRollNo(request.getRollNo());
                 s.setDateOfBirth(request.getDateOfBirth());
                 s.setParentName(request.getParentName());
-                s.setGender(request.getGender());   // ✅ gender saved to DB
+                s.setGender(request.getGender());
+
+                s.setLoginCount(0);
+                s.setInterventionSessionCount(0);
+                s.setTimeSpent(0L);
+                s.setIntervention(null);
+
                 user = s;
-
-                user.setUsername(request.getUsername());
-                User savedUser = userRepository.save(user);
-
-                if (sendEmailInvite) {
-                    emailService.sendPasswordSetupEmail(savedUser);
-                }
-
-                return mapToFullResponse(savedUser);
             }
-
             default -> throw new EmpathaiException("Invalid role provided");
         }
 
         user.setUsername(request.getUsername());
         User savedUser = userRepository.save(user);
 
-        // ── REQUIREMENT 2 ──────────────────────────────────────────────────
-        // Send MFA email invite to school_admin, psychologist, content_admin,
-        // and teacher as well — keeping password generation as fallback.
-        // If admin provided a password, no email is sent (old behaviour kept).
-        // If admin left password blank, email invite is sent instead.
         boolean passwordWasProvided = request.getPassword() != null && !request.getPassword().isBlank();
-        if (!passwordWasProvided &&
-                (savedUser.getRole() == UserRole.SCHOOL_ADMIN
-                        || savedUser.getRole() == UserRole.PSYCHOLOGIST
-                        || savedUser.getRole() == UserRole.CONTENT_ADMIN
-                        || savedUser.getRole() == UserRole.TEACHER)) {
+
+        if (sendEmailInvite || (!passwordWasProvided &&
+                (savedUser.getRole() == UserRole.SCHOOL_ADMIN ||
+                        savedUser.getRole() == UserRole.PSYCHOLOGIST ||
+                        savedUser.getRole() == UserRole.CONTENT_ADMIN ||
+                        savedUser.getRole() == UserRole.TEACHER))) {
             emailService.sendPasswordSetupEmail(savedUser);
         }
 
         return mapToFullResponse(savedUser);
     }
+
+    // ===================================================================
+    // UPDATE USER
+    // ===================================================================
 
     @Transactional
     public UserResponse updateUser(Long id, UserRequest request) {
@@ -192,7 +168,13 @@ public class UserService {
             if (request.getParentEmail() != null) s.setParentEmail(request.getParentEmail());
             if (request.getDateOfBirth() != null) s.setDateOfBirth(request.getDateOfBirth());
             if (request.getParentName() != null) s.setParentName(request.getParentName());
-            if (request.getGender() != null) s.setGender(request.getGender()); // ✅ gender update
+            if (request.getGender() != null) s.setGender(request.getGender());
+
+            if (request.getLoginCount() != null) s.setLoginCount(request.getLoginCount());
+            if (request.getInterventionSessionCount() != null) s.setInterventionSessionCount(request.getInterventionSessionCount());
+            if (request.getTimeSpent() != null) s.setTimeSpent(request.getTimeSpent());
+            if (request.getIntervention() != null) s.setIntervention(request.getIntervention());
+
         } else if (user instanceof Psychologist p) {
             if (request.getPhoneNumber() != null) p.setPhoneNumber(request.getPhoneNumber());
         } else if (user instanceof ContentAdmin ca) {
@@ -223,9 +205,9 @@ public class UserService {
         userRepository.deleteById(id);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // STUDENT ACTIVITY TRACKING
-    // ─────────────────────────────────────────────────────────────
+    // ===================================================================
+    // ACTIVITY TRACKING
+    // ===================================================================
 
     @Transactional
     public void incrementTimeSpent(Long id, Long seconds) {
@@ -260,31 +242,43 @@ public class UserService {
         return newCount;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // ROLE-SPECIFIC LIST ENDPOINTS
-    // ─────────────────────────────────────────────────────────────
+    @Transactional
+    public void incrementLoginCount(Long studentId) {
+        User user = userRepository.findById(studentId)
+                .orElseThrow(() -> new EmpathaiException("User not found with id: " + studentId));
+
+        if (user instanceof Student s) {
+            int current = s.getLoginCount() != null ? s.getLoginCount() : 0;
+            s.setLoginCount(current + 1);
+            studentRepository.save(s);
+        }
+    }
+
+    // ===================================================================
+    // LIST ENDPOINTS (Required by UserController)
+    // ===================================================================
+
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(this::mapToFullResponse)
+                .collect(Collectors.toList());
+    }
 
     public Page<StudentSummaryResponse> getStudentPage(String school, String search, int page, int size) {
         Map<Long, String> schoolNameById = schoolRepository.findAll().stream()
                 .collect(Collectors.toMap(School::getId, School::getName));
 
         List<StudentSummaryResponse> all = studentRepository.findAll().stream()
-                .filter(s -> {
-                    if (school == null) return true;
-                    String schoolName = s.getSchoolId() != null
-                            ? schoolNameById.getOrDefault(s.getSchoolId(), "")
-                            : "";
-                    return school.equals(schoolName);
-                })
-                .filter(s -> search == null
-                        || (s.getName() != null && s.getName().toLowerCase().contains(search.toLowerCase()))
-                        || (s.getEmail() != null && s.getEmail().toLowerCase().contains(search.toLowerCase())))
+                .filter(s -> school == null || school.equals(schoolNameById.getOrDefault(s.getSchoolId(), "")))
+                .filter(s -> search == null ||
+                        (s.getName() != null && s.getName().toLowerCase().contains(search.toLowerCase())) ||
+                        (s.getEmail() != null && s.getEmail().toLowerCase().contains(search.toLowerCase())))
                 .map(s -> StudentSummaryResponse.builder()
                         .id(s.getId())
                         .name(s.getName())
                         .email(s.getEmail())
                         .username(s.getUsername())
-                        .active(Boolean.TRUE.equals(s.getActive()))
+                        .active(true)
                         .className(s.getClassName())
                         .rollNo(s.getRollNo())
                         .school(s.getSchoolId() != null ? schoolNameById.get(s.getSchoolId()) : null)
@@ -302,8 +296,8 @@ public class UserService {
 
         List<SchoolAdminResponse> all = userRepository.findAll().stream()
                 .filter(u -> u.getRole() == UserRole.SCHOOL_ADMIN)
-                .filter(u -> search == null
-                        || (u.getName() != null && u.getName().toLowerCase().contains(search.toLowerCase())))
+                .filter(u -> search == null ||
+                        (u.getName() != null && u.getName().toLowerCase().contains(search.toLowerCase())))
                 .map(u -> {
                     SchoolAdmin sa = (SchoolAdmin) u;
                     return SchoolAdminResponse.builder()
@@ -311,7 +305,7 @@ public class UserService {
                             .name(sa.getName())
                             .email(sa.getEmail())
                             .username(sa.getUsername())
-                            .active(Boolean.TRUE.equals(sa.getActive()))
+                            .active(true)
                             .schoolId(sa.getSchoolId())
                             .school(sa.getSchoolId() != null ? schoolNameById.get(sa.getSchoolId()) : null)
                             .build();
@@ -326,8 +320,8 @@ public class UserService {
     public Page<PsychologistResponse> getPsychologistPage(String search, int page, int size) {
         List<PsychologistResponse> all = userRepository.findAll().stream()
                 .filter(u -> u.getRole() == UserRole.PSYCHOLOGIST)
-                .filter(u -> search == null
-                        || (u.getName() != null && u.getName().toLowerCase().contains(search.toLowerCase())))
+                .filter(u -> search == null ||
+                        (u.getName() != null && u.getName().toLowerCase().contains(search.toLowerCase())))
                 .map(u -> {
                     Psychologist p = (Psychologist) u;
                     return PsychologistResponse.builder()
@@ -336,7 +330,7 @@ public class UserService {
                             .email(p.getEmail())
                             .username(p.getUsername())
                             .phoneNumber(p.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(p.getActive()))
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -349,8 +343,8 @@ public class UserService {
     public Page<ContentAdminResponse> getContentAdminPage(String search, int page, int size) {
         List<ContentAdminResponse> all = userRepository.findAll().stream()
                 .filter(u -> u.getRole() == UserRole.CONTENT_ADMIN)
-                .filter(u -> search == null
-                        || (u.getName() != null && u.getName().toLowerCase().contains(search.toLowerCase())))
+                .filter(u -> search == null ||
+                        (u.getName() != null && u.getName().toLowerCase().contains(search.toLowerCase())))
                 .map(u -> {
                     ContentAdmin ca = (ContentAdmin) u;
                     return ContentAdminResponse.builder()
@@ -359,7 +353,7 @@ public class UserService {
                             .email(ca.getEmail())
                             .username(ca.getUsername())
                             .phoneNumber(ca.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(ca.getActive()))
+                            .active(true)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -369,48 +363,14 @@ public class UserService {
         return new PageImpl<>(all.subList(start, end), PageRequest.of(page, size), all.size());
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // DETAIL / INTERNAL USE
-    // ─────────────────────────────────────────────────────────────
+    // ===================================================================
+    // DETAIL & MAPPING
+    // ===================================================================
 
     public UserResponse getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EmpathaiException("User not found with id: " + id));
         return mapToFullResponse(user);
-    }
-
-    public List<UserResponse> getAllUsers() {
-        return userRepository.findAll().stream()
-                .map(this::mapToFullResponse)
-                .collect(Collectors.toList());
-    }
-
-    public List<UserResponse> getUsersByRole(UserRole role) {
-        if (role == UserRole.STUDENT) {
-            return studentRepository.findAll().stream()
-                    .map(this::mapToFullResponse)
-                    .collect(Collectors.toList());
-        }
-        return userRepository.findAll().stream()
-                .filter(u -> u.getRole() == role)
-                .map(this::mapToFullResponse)
-                .collect(Collectors.toList());
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // INTERNAL HELPERS
-    // ─────────────────────────────────────────────────────────────
-
-    private Long resolveSchoolId(UserRequest request) {
-        if (request.getSchoolId() != null) {
-            return request.getSchoolId();
-        }
-        if (request.getSchool() != null && !request.getSchool().isBlank()) {
-            return schoolRepository.findByName(request.getSchool())
-                    .map(School::getId)
-                    .orElse(null);
-        }
-        return null;
     }
 
     public UserResponse mapToFullResponse(User user) {
@@ -424,20 +384,15 @@ public class UserService {
 
         if (user instanceof SchoolAdmin sa && sa.getSchoolId() != null) {
             builder.schoolId(sa.getSchoolId());
-            schoolRepository.findById(sa.getSchoolId())
-                    .ifPresent(s -> builder.school(s.getName()));
-
+            schoolRepository.findById(sa.getSchoolId()).ifPresent(s -> builder.school(s.getName()));
         } else if (user instanceof Psychologist p) {
             builder.phoneNumber(p.getPhoneNumber());
-
         } else if (user instanceof ContentAdmin ca) {
             builder.phoneNumber(ca.getPhoneNumber());
-
         } else if (user instanceof Student s) {
             if (s.getSchoolId() != null) {
                 builder.schoolId(s.getSchoolId());
-                schoolRepository.findById(s.getSchoolId())
-                        .ifPresent(sc -> builder.school(sc.getName()));
+                schoolRepository.findById(s.getSchoolId()).ifPresent(sc -> builder.school(sc.getName()));
             }
             builder.rollNo(s.getRollNo())
                     .className(s.getClassName())
@@ -446,7 +401,7 @@ public class UserService {
                     .parentEmail(s.getParentEmail())
                     .dateOfBirth(s.getDateOfBirth())
                     .parentName(s.getParentName())
-                    .gender(s.getGender())                           // ✅ gender in response
+                    .gender(s.getGender())
                     .loginCount(s.getLoginCount())
                     .interventionSessionCount(s.getInterventionSessionCount())
                     .intervention(s.getIntervention())
@@ -454,5 +409,15 @@ public class UserService {
         }
 
         return builder.build();
+    }
+
+    private Long resolveSchoolId(UserRequest request) {
+        if (request.getSchoolId() != null) return request.getSchoolId();
+        if (request.getSchool() != null && !request.getSchool().isBlank()) {
+            return schoolRepository.findByName(request.getSchool())
+                    .map(School::getId)
+                    .orElse(null);
+        }
+        return null;
     }
 }
