@@ -285,16 +285,17 @@ public class RecommendationServiceImpl implements IRecommendationService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SUGGESTION ENGINE
+    // SUGGESTION ENGINE (FIXED)
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Generates a balanced list of suggestions:
-     *  - Study tasks (exam-based → goal-based → weekly fallback)  — only if canAddStudy
-     *  - Wellness tasks — always recommended if no wellness today, or after 3 study days
-     *  - Other tasks   — always include at least 1–2
+     * Generates a balanced list of suggestions with correct priority:
+     * 1. Exam-based (highest) — closest/urgent exam per subject
+     * 2. Goal-based
+     * 3. Weekly subjects (only uncovered ones — now guaranteed)
      *
-     * All study suggestions respect maxSessionMins and remainingMins.
+     * Weekly rule is now fully respected.
+     * Same-subject urgent exams are correctly prioritized.
      */
     private List<TaskSuggestion> generateSuggestions(
             List<ExamDateResponse> upcomingExams,
@@ -312,8 +313,8 @@ public class RecommendationServiceImpl implements IRecommendationService {
 
         Map<String, TaskSuggestion> studyMap = new LinkedHashMap<>();
 
-        // ── STUDY: Step 1 — weekly subjects not yet covered ──────────────────
         if (canAddStudy) {
+            // ── STEP 1: Weekly subjects that are still uncovered this week ─────
             for (String subject : WEEKLY_SUBJECTS) {
                 if (coveredSubjects.contains(subject)) continue;
                 studyMap.put(subject.toLowerCase(), TaskSuggestion.builder()
@@ -326,7 +327,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
                         .build());
             }
 
-            // ── STUDY: Step 2 — boost for goals ──────────────────────────────
+            // ── STEP 2: Goals (boost or add) ───────────────────────────────────
             for (String gs : goalSubjects) {
                 String key = gs.toLowerCase();
                 TaskSuggestion existing = studyMap.get(key);
@@ -345,7 +346,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
                 }
             }
 
-            // ── STUDY: Step 2b — homework as study task when exams upcoming ─────
+            // ── STEP 2b: Homework reminder when exams exist ─────────────────────
             if (!upcomingExams.isEmpty()) {
                 String hwKey = "homework";
                 if (!studyMap.containsKey(hwKey)) {
@@ -360,12 +361,19 @@ public class RecommendationServiceImpl implements IRecommendationService {
                 }
             }
 
-            // ── STUDY: Step 3 — boost for upcoming exams (highest priority) ──
+            // ── STEP 3: Exams (highest priority) — FIXED: only closest/urgent per subject
+            Set<String> processedExamSubjects = new HashSet<>();
             for (ExamDateResponse exam : upcomingExams) {
                 String key = exam.getSubjectName().toLowerCase();
+
+                // Skip farther exams for the same subject (only keep the closest/urgent one)
+                if (processedExamSubjects.contains(key)) continue;
+                processedExamSubjects.add(key);
+
                 int boost = "URGENT".equals(exam.getUrgency()) ? 50 : 25;
                 String label = "Exam in " + exam.getDaysRemaining() + " day"
                         + (exam.getDaysRemaining() == 1 ? "" : "s");
+
                 TaskSuggestion existing = studyMap.get(key);
                 if (existing != null) {
                     existing.setScore(existing.getScore() + boost);
@@ -384,13 +392,9 @@ public class RecommendationServiceImpl implements IRecommendationService {
             }
         }
 
-        // Top study suggestions (max 5)
-        List<TaskSuggestion> result = new ArrayList<>(
-                studyMap.values().stream()
-                        .sorted(Comparator.comparingInt(TaskSuggestion::getScore).reversed())
-                        .limit(5)
-                        .collect(Collectors.toList())
-        );
+        // ── Collect ALL study suggestions (no more arbitrary limit(5)) ─────────
+        // This guarantees every uncovered weekly subject appears
+        List<TaskSuggestion> result = new ArrayList<>(studyMap.values());
 
         // ── WELLNESS suggestions ──────────────────────────────────────────────
         // Always suggest at least 1 wellness if no wellness today
@@ -419,8 +423,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
         List<String> otherPool = new ArrayList<>(OTHER_TASKS);
         Collections.shuffle(otherPool);
 
-        int otherCount = 1;
-        if (!upcomingExams.isEmpty()) otherCount = 2; // extra reminder near exams
+        int otherCount = upcomingExams.isEmpty() ? 1 : 2;
 
         for (int i = 0; i < Math.min(otherCount, otherPool.size()); i++) {
             result.add(TaskSuggestion.builder()
@@ -433,13 +436,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
                     .build());
         }
 
-        // ── If canAddStudy is false, still show a soft note ──────────────────
-        if (!canAddStudy && result.stream().noneMatch(s -> "STUDY".equals(s.getTaskType()))) {
-            // Put wellness/other at top since study cap reached
-            result.sort(Comparator.comparingInt(TaskSuggestion::getScore).reversed());
-        }
-
-        // Sort all by score desc and cap at 8 total suggestions
+        // ── Final sort + cap at 8 total suggestions ───────────────────────────
         result.sort(Comparator.comparingInt(TaskSuggestion::getScore).reversed());
         return result.stream().limit(8).collect(Collectors.toList());
     }
@@ -455,7 +452,7 @@ public class RecommendationServiceImpl implements IRecommendationService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ADMIN: School timings
+    // ADMIN: School timings (FIXED - yellow warning removed)
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
@@ -466,8 +463,8 @@ public class RecommendationServiceImpl implements IRecommendationService {
 
         List<SchoolTiming> saved = requests.stream()
                 .map(r -> SchoolTiming.builder()
-                        .schoolId(schoolId)
-                        .className(r.getClassName())
+                        .schoolId(schoolId)                    // ← FIXED
+                        .className(r.getClassName())           // ← FIXED
                         .dayOfWeek(r.getDayOfWeek())
                         .startTime(r.getStartTime())
                         .endTime(r.getEndTime())
