@@ -4,9 +4,12 @@ import com.empathai.user.dto.auth.AuthResponse;
 import com.empathai.user.dto.auth.LoginRequest;
 import com.empathai.user.dto.auth.SetPasswordRequest;
 import com.empathai.user.entity.PasswordSetupToken;
+import com.empathai.user.entity.Student;
 import com.empathai.user.entity.User;
+import com.empathai.user.entity.enums.UserRole;
 import com.empathai.user.exception.EmpathaiException;
 import com.empathai.user.repository.PasswordSetupTokenRepository;
+import com.empathai.user.repository.StudentRepository;
 import com.empathai.user.repository.UserRepository;
 import com.empathai.user.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -25,12 +28,14 @@ import java.util.Map;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final StudentRepository studentRepository;          // ✅ NEW: for loginCount
     private final PasswordSetupTokenRepository tokenRepository;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String loginId = request.getEmail();
 
@@ -44,6 +49,13 @@ public class AuthService {
             );
         } catch (AuthenticationException e) {
             throw new EmpathaiException("Invalid credentials", "AUTH_FAILURE");
+        }
+
+        // ── FIX 1: Increment loginCount for students on every successful login ──
+        // StudentRepository.incrementLoginCount() uses an atomic UPDATE query —
+        // no race condition, no extra SELECT needed.
+        if (userLookup.getRole() == UserRole.STUDENT) {
+            studentRepository.incrementLoginCount(userLookup.getId());
         }
 
         String jwtToken = jwtService.generateToken(userLookup);
@@ -93,12 +105,10 @@ public class AuthService {
             throw new EmpathaiException("This link has expired", "TOKEN_EXPIRED");
         }
 
-        // Save the new password
         User user = setupToken.getUser();
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         userRepository.save(user);
 
-        // Mark token as used — can never be reused
         setupToken.setUsed(true);
         tokenRepository.save(setupToken);
     }
