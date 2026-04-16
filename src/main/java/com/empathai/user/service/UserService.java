@@ -1,5 +1,6 @@
 package com.empathai.user.service;
 
+import com.empathai.rewards.service.RewardsService;
 import com.empathai.user.dto.user.*;
 import com.empathai.user.entity.*;
 import com.empathai.user.entity.enums.UserRole;
@@ -8,6 +9,7 @@ import com.empathai.user.repository.SchoolRepository;
 import com.empathai.user.repository.StudentRepository;
 import com.empathai.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -20,6 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -29,6 +32,7 @@ public class UserService {
     private final SchoolRepository schoolRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final RewardsService rewardsService;
 
     // ─────────────────────────────────────────────────────────────
     // CREATE / UPDATE / DELETE
@@ -65,7 +69,6 @@ public class UserService {
             throw new EmpathaiException("Username already exists", "DUPLICATE_USERNAME");
         }
 
-        // Whether the admin provided a real password or left it blank
         boolean passwordProvided = request.getPassword() != null && !request.getPassword().isBlank();
 
         User user;
@@ -79,7 +82,6 @@ public class UserService {
             }
 
             case CONTENT_ADMIN -> {
-                // ── FIX 2: MFA email when password blank ──
                 String encodedPassword = passwordEncoder.encode(
                         passwordProvided ? request.getPassword() : UUID.randomUUID().toString());
                 ContentAdmin ca = new ContentAdmin(request.getEmail(), encodedPassword, request.getName());
@@ -88,7 +90,6 @@ public class UserService {
             }
 
             case PSYCHOLOGIST -> {
-                // ── FIX 2: MFA email when password blank ──
                 String encodedPassword = passwordEncoder.encode(
                         passwordProvided ? request.getPassword() : UUID.randomUUID().toString());
                 Psychologist p = new Psychologist(request.getEmail(), encodedPassword, request.getName());
@@ -97,7 +98,6 @@ public class UserService {
             }
 
             case SCHOOL_ADMIN -> {
-                // ── FIX 2: MFA email when password blank ──
                 String encodedPassword = passwordEncoder.encode(
                         passwordProvided ? request.getPassword() : UUID.randomUUID().toString());
                 SchoolAdmin sa = new SchoolAdmin(request.getEmail(), encodedPassword, request.getName());
@@ -106,7 +106,6 @@ public class UserService {
             }
 
             case TEACHER -> {
-                // ── FIX 2: MFA email when password blank ──
                 String encodedPassword = passwordEncoder.encode(
                         passwordProvided ? request.getPassword() : UUID.randomUUID().toString());
                 Teacher t = new Teacher(request.getEmail(), encodedPassword, request.getName());
@@ -116,7 +115,6 @@ public class UserService {
             }
 
             case STUDENT -> {
-                // Students: use provided password OR send MFA email invite
                 String encodedPassword = passwordEncoder.encode(
                         passwordProvided ? request.getPassword() : UUID.randomUUID().toString());
                 Student s = new Student(request.getEmail(), encodedPassword, request.getName());
@@ -128,7 +126,7 @@ public class UserService {
                 s.setRollNo(request.getRollNo());
                 s.setDateOfBirth(request.getDateOfBirth());
                 s.setParentName(request.getParentName());
-                s.setGender(request.getGender());   // ✅ gender saved
+                s.setGender(request.getGender());
                 user = s;
             }
 
@@ -138,8 +136,6 @@ public class UserService {
         user.setUsername(request.getUsername());
         User savedUser = userRepository.save(user);
 
-        // ── Send MFA email invite if no password was provided ──
-        // Works for ALL roles: student, school_admin, psychologist, content_admin, teacher
         if (!passwordProvided) {
             emailService.sendPasswordSetupEmail(savedUser);
         }
@@ -169,7 +165,7 @@ public class UserService {
             if (request.getParentEmail() != null) s.setParentEmail(request.getParentEmail());
             if (request.getDateOfBirth() != null) s.setDateOfBirth(request.getDateOfBirth());
             if (request.getParentName() != null) s.setParentName(request.getParentName());
-            if (request.getGender() != null) s.setGender(request.getGender());  // ✅ gender update
+            if (request.getGender() != null) s.setGender(request.getGender());
         } else if (user instanceof Psychologist p) {
             if (request.getPhoneNumber() != null) p.setPhoneNumber(request.getPhoneNumber());
         } else if (user instanceof ContentAdmin ca) {
@@ -215,6 +211,9 @@ public class UserService {
         }
     }
 
+    /**
+     * Increments interventionSessionCount and awards intervention badges.
+     */
     @Transactional
     public int incrementInterventionAndAwardBadges(Long id, String activityType) {
         User user = userRepository.findById(id)
@@ -229,6 +228,14 @@ public class UserService {
             s.setIntervention(activityType);
         }
         studentRepository.save(s);
+
+        // ── KEY FIX: check and award intervention badges ─────────────────────
+        try {
+            rewardsService.checkAndAwardInterventionBadges(id, newCount);
+        } catch (Exception e) {
+            log.warn("Failed to award intervention badge for student {}: {}", id, e.getMessage());
+        }
+
         return newCount;
     }
 
@@ -252,7 +259,7 @@ public class UserService {
                         || (s.getEmail() != null && s.getEmail().toLowerCase().contains(search.toLowerCase())))
                 .map(s -> StudentSummaryResponse.builder()
                         .id(s.getId()).name(s.getName()).email(s.getEmail())
-                        .username(s.getUsername()).active(Boolean.TRUE.equals(s.getActive()))
+                        .username(s.getUsername()).active(true)
                         .className(s.getClassName()).rollNo(s.getRollNo())
                         .school(s.getSchoolId() != null ? schoolNameById.get(s.getSchoolId()) : null)
                         .build())
@@ -275,7 +282,7 @@ public class UserService {
                     SchoolAdmin sa = (SchoolAdmin) u;
                     return SchoolAdminResponse.builder()
                             .id(sa.getId()).name(sa.getName()).email(sa.getEmail())
-                            .username(sa.getUsername()).active(Boolean.TRUE.equals(sa.getActive()))
+                            .username(sa.getUsername()).active(true)
                             .schoolId(sa.getSchoolId())
                             .school(sa.getSchoolId() != null ? schoolNameById.get(sa.getSchoolId()) : null)
                             .build();
@@ -296,7 +303,7 @@ public class UserService {
                     return PsychologistResponse.builder()
                             .id(p.getId()).name(p.getName()).email(p.getEmail())
                             .username(p.getUsername()).phoneNumber(p.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(p.getActive())).build();
+                            .active(true).build();
                 }).collect(Collectors.toList());
 
         int start = Math.min(page * size, all.size());
@@ -314,7 +321,7 @@ public class UserService {
                     return ContentAdminResponse.builder()
                             .id(ca.getId()).name(ca.getName()).email(ca.getEmail())
                             .username(ca.getUsername()).phoneNumber(ca.getPhoneNumber())
-                            .active(Boolean.TRUE.equals(ca.getActive())).build();
+                            .active(true).build();
                 }).collect(Collectors.toList());
 
         int start = Math.min(page * size, all.size());
@@ -364,7 +371,7 @@ public class UserService {
         UserResponse.UserResponseBuilder builder = UserResponse.builder()
                 .id(user.getId()).name(user.getName()).email(user.getEmail())
                 .username(user.getUsername()).role(user.getRole())
-                .active(Boolean.TRUE.equals(user.getActive()));
+                .active(true);
 
         if (user instanceof SchoolAdmin sa && sa.getSchoolId() != null) {
             builder.schoolId(sa.getSchoolId());
@@ -374,9 +381,13 @@ public class UserService {
             builder.phoneNumber(p.getPhoneNumber());
         } else if (user instanceof ContentAdmin ca) {
             builder.phoneNumber(ca.getPhoneNumber());
-        } else if (user instanceof Student s && s.getSchoolId() != null) {
-            builder.schoolId(s.getSchoolId())
-                    .rollNo(s.getRollNo())
+        } else if (user instanceof Student s) {
+            if (s.getSchoolId() != null) {
+                builder.schoolId(s.getSchoolId());
+                schoolRepository.findById(s.getSchoolId())
+                        .ifPresent(sc -> builder.school(sc.getName()));
+            }
+            builder.rollNo(s.getRollNo())
                     .className(s.getClassName())
                     .section(s.getSection())
                     .phoneNumber(s.getPhoneNumber())
@@ -388,8 +399,6 @@ public class UserService {
                     .interventionSessionCount(s.getInterventionSessionCount())
                     .intervention(s.getIntervention())
                     .timeSpent(s.getTimeSpent());
-            schoolRepository.findById(s.getSchoolId())
-                    .ifPresent(sc -> builder.school(sc.getName()));
         }
 
         return builder.build();

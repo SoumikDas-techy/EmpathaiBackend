@@ -1,5 +1,6 @@
 package com.empathai.user.service;
 
+import com.empathai.rewards.service.RewardsService;
 import com.empathai.user.dto.auth.AuthResponse;
 import com.empathai.user.dto.auth.LoginRequest;
 import com.empathai.user.dto.auth.SetPasswordRequest;
@@ -13,6 +14,7 @@ import com.empathai.user.repository.StudentRepository;
 import com.empathai.user.repository.UserRepository;
 import com.empathai.user.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
@@ -23,17 +25,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final StudentRepository studentRepository;          // ✅ NEW: for loginCount
+    private final StudentRepository studentRepository;
     private final PasswordSetupTokenRepository tokenRepository;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
+    private final RewardsService rewardsService;
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
@@ -51,11 +55,31 @@ public class AuthService {
             throw new EmpathaiException("Invalid credentials", "AUTH_FAILURE");
         }
 
-        // ── FIX 1: Increment loginCount for students on every successful login ──
-        // StudentRepository.incrementLoginCount() uses an atomic UPDATE query —
-        // no race condition, no extra SELECT needed.
+        // ── Increment loginCount and award badges for students ──────────────
         if (userLookup.getRole() == UserRole.STUDENT) {
+
+            // Atomically increment login count
             studentRepository.incrementLoginCount(userLookup.getId());
+
+            // Reload student to get the updated loginCount
+            Student student = studentRepository.findById(userLookup.getId()).orElse(null);
+
+            if (student != null) {
+                int newLoginCount = student.getLoginCount() != null
+                        ? student.getLoginCount()
+                        : 1;
+
+                // Check and award login milestone badges
+                try {
+                    rewardsService.checkAndAwardLoginBadges(userLookup.getId(), newLoginCount);
+                    log.info("Login badge check completed for student {} with {} logins",
+                            userLookup.getId(), newLoginCount);
+                } catch (Exception e) {
+                    // Never let badge logic break the login flow
+                    log.warn("Failed to award login badge for student {}: {}",
+                            userLookup.getId(), e.getMessage());
+                }
+            }
         }
 
         String jwtToken = jwtService.generateToken(userLookup);
@@ -102,7 +126,7 @@ public class AuthService {
             throw new EmpathaiException("This link has already been used", "TOKEN_USED");
         }
         if (setupToken.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new EmpathaiException("This link has expired", "TOKEN_EXPIRED");
+            throw new EmpathaiException("This link has expired. Please contact your admin.", "TOKEN_EXPIRED");
         }
 
         User user = setupToken.getUser();
