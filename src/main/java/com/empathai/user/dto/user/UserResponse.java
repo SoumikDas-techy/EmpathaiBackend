@@ -27,6 +27,7 @@ public class UserResponse {
     private String email;
     private String username;
     private String phoneNumber;
+    private String parentPhone;
     private String parentEmail;
     private UserRole role;
     private boolean active;
@@ -38,7 +39,6 @@ public class UserResponse {
     private String section;
     private String rollNo;
     private String dateOfBirth;
-    private Integer age;
     private String gender;
     private String parentName;
 

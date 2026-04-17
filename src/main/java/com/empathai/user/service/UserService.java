@@ -52,7 +52,8 @@ public class UserService {
                     .className(request.getClassName())
                     .section(request.getSection())
                     .phoneNumber(request.getPhoneNumber())
-                    .parentEmail(request.getParentEmail())
+                    .parentPhone(request.getParentPhone())
+                    .parentEmail(request.getEmail())
                     .rollNo(request.getRollNo())
                     .dateOfBirth(request.getDateOfBirth())
                     .parentName(request.getParentName())
@@ -121,8 +122,8 @@ public class UserService {
                 s.setSchoolId(schoolId);
                 s.setClassName(request.getClassName());
                 s.setSection(request.getSection());
-                s.setPhoneNumber(request.getPhoneNumber());
-                s.setParentEmail(request.getParentEmail());
+                s.setParentEmail(request.getEmail()); // parent_email mirrors the student's email
+                s.setParentPhone(request.getParentPhone());
                 s.setRollNo(request.getRollNo());
                 s.setDateOfBirth(request.getDateOfBirth());
                 s.setParentName(request.getParentName());
@@ -161,11 +162,12 @@ public class UserService {
             if (request.getClassName() != null) s.setClassName(request.getClassName());
             if (schoolId != null) s.setSchoolId(schoolId);
             if (request.getSection() != null) s.setSection(request.getSection());
-            if (request.getPhoneNumber() != null) s.setPhoneNumber(request.getPhoneNumber());
-            if (request.getParentEmail() != null) s.setParentEmail(request.getParentEmail());
+            if (request.getParentPhone() != null) s.setParentPhone(request.getParentPhone());
             if (request.getDateOfBirth() != null) s.setDateOfBirth(request.getDateOfBirth());
             if (request.getParentName() != null) s.setParentName(request.getParentName());
             if (request.getGender() != null) s.setGender(request.getGender());
+            // Keep parent_email in sync with the student's email
+            s.setParentEmail(user.getEmail());
         } else if (user instanceof Psychologist p) {
             if (request.getPhoneNumber() != null) p.setPhoneNumber(request.getPhoneNumber());
         } else if (user instanceof ContentAdmin ca) {
@@ -390,8 +392,8 @@ public class UserService {
             builder.rollNo(s.getRollNo())
                     .className(s.getClassName())
                     .section(s.getSection())
-                    .phoneNumber(s.getPhoneNumber())
                     .parentEmail(s.getParentEmail())
+                    .parentPhone(s.getParentPhone())
                     .dateOfBirth(s.getDateOfBirth())
                     .parentName(s.getParentName())
                     .gender(s.getGender())
