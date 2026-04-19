@@ -38,23 +38,30 @@ public class InterventionController {
     @Transactional
     public ResponseEntity<Map<String, Object>> completeInterventionSession(
             @PathVariable Long studentId) {
+        log.info("completeInterventionSession started for studentId={}", studentId);
+        try {
+            studentRepository.incrementInterventionSessionCount(studentId);
 
-        studentRepository.incrementInterventionSessionCount(studentId);
+            Student refreshed = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found: " + studentId));
 
-        Student refreshed = studentRepository.findById(studentId)
-                .orElseThrow(() -> new RuntimeException("Student not found: " + studentId));
+            int newCount = refreshed.getInterventionSessionCount() != null
+                    ? refreshed.getInterventionSessionCount() : 1;
 
-        int newCount = refreshed.getInterventionSessionCount() != null
-                ? refreshed.getInterventionSessionCount() : 1;
+            rewardsService.checkAndAwardInterventionBadges(studentId, newCount);
 
-        rewardsService.checkAndAwardInterventionBadges(studentId, newCount);
+            log.info("Student {} completed intervention session — count now {}", studentId, newCount);
 
-        log.info("Student {} completed intervention session — count now {}", studentId, newCount);
-
-        return ResponseEntity.ok(Map.of(
-                "studentId",                studentId,
-                "interventionSessionCount", newCount
-        ));
+            ResponseEntity<Map<String, Object>> result = ResponseEntity.ok(Map.of(
+                    "studentId",                studentId,
+                    "interventionSessionCount", newCount
+            ));
+            log.info("completeInterventionSession completed successfully for studentId={}", studentId);
+            return result;
+        } catch (Exception e) {
+            log.error("completeInterventionSession failed for studentId={}: {}", studentId, e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**
@@ -66,15 +73,23 @@ public class InterventionController {
     @GetMapping("/students/{studentId}/count")
     @PreAuthorize("hasAnyRole('STUDENT','PSYCHOLOGIST','SCHOOL_ADMIN','SUPER_ADMIN')")
     public ResponseEntity<Map<String, Object>> getInterventionCount(@PathVariable Long studentId) {
-        Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new RuntimeException("Student not found: " + studentId));
+        log.info("getInterventionCount started for studentId={}", studentId);
+        try {
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found: " + studentId));
 
-        int count = student.getInterventionSessionCount() != null
-                ? student.getInterventionSessionCount() : 0;
+            int count = student.getInterventionSessionCount() != null
+                    ? student.getInterventionSessionCount() : 0;
 
-        return ResponseEntity.ok(Map.of(
-                "studentId",                studentId,
-                "interventionSessionCount", count
-        ));
+            ResponseEntity<Map<String, Object>> result = ResponseEntity.ok(Map.of(
+                    "studentId",                studentId,
+                    "interventionSessionCount", count
+            ));
+            log.info("getInterventionCount completed successfully for studentId={}", studentId);
+            return result;
+        } catch (Exception e) {
+            log.error("getInterventionCount failed for studentId={}: {}", studentId, e.getMessage(), e);
+            throw e;
+        }
     }
 }

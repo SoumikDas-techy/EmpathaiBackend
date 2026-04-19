@@ -32,7 +32,15 @@ public class RewardsController {
     @GetMapping("/badges")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<BadgeResponse>> getAllBadges() {
-        return ResponseEntity.ok(rewardsService.getAllBadges());
+        logger.info("getAllBadges started");
+        try {
+            ResponseEntity<List<BadgeResponse>> result = ResponseEntity.ok(rewardsService.getAllBadges());
+            logger.info("getAllBadges completed successfully");
+            return result;
+        } catch (Exception e) {
+            logger.error("getAllBadges failed: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     @PostMapping("/badges")
@@ -43,8 +51,16 @@ public class RewardsController {
             @RequestParam("triggerTitle") String triggerTitle,
             @RequestParam(value = "triggerValue", required = false) String triggerValue,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(rewardsService.createBadge(title, triggerType, triggerTitle, triggerValue, image));
+        logger.info("createBadge started for title={}", title);
+        try {
+            ResponseEntity<BadgeResponse> result = ResponseEntity.status(HttpStatus.CREATED)
+                    .body(rewardsService.createBadge(title, triggerType, triggerTitle, triggerValue, image));
+            logger.info("createBadge completed successfully for title={}", title);
+            return result;
+        } catch (Exception e) {
+            logger.error("createBadge failed for title={}: {}", title, e.getMessage(), e);
+            throw e;
+        }
     }
 
     @PutMapping("/badges/{id}")
@@ -56,14 +72,30 @@ public class RewardsController {
             @RequestParam("triggerTitle") String triggerTitle,
             @RequestParam(value = "triggerValue", required = false) String triggerValue,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.ok(rewardsService.updateBadge(id, title, triggerType, triggerTitle, triggerValue, image));
+        logger.info("updateBadge started for id={}", id);
+        try {
+            ResponseEntity<BadgeResponse> result = ResponseEntity.ok(rewardsService.updateBadge(id, title, triggerType, triggerTitle, triggerValue, image));
+            logger.info("updateBadge completed successfully for id={}", id);
+            return result;
+        } catch (Exception e) {
+            logger.error("updateBadge failed for id={}: {}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 
     @DeleteMapping("/badges/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> deleteBadge(@PathVariable Long id) {
-        rewardsService.deleteBadge(id);
-        return ResponseEntity.noContent().build();
+        logger.info("deleteBadge started for id={}", id);
+        try {
+            rewardsService.deleteBadge(id);
+            ResponseEntity<Void> result = ResponseEntity.noContent().build();
+            logger.info("deleteBadge completed successfully for id={}", id);
+            return result;
+        } catch (Exception e) {
+            logger.error("deleteBadge failed for id={}: {}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -76,13 +108,16 @@ public class RewardsController {
     @GetMapping("/students/me/badges")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<List<BadgeResponse>> getMyBadges() {
+        logger.info("getMyBadges started");
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             User user = (User) auth.getPrincipal();
             List<BadgeResponse> badges = rewardsService.getStudentBadges(user.getId());
-            return ResponseEntity.ok(badges);
+            ResponseEntity<List<BadgeResponse>> result = ResponseEntity.ok(badges);
+            logger.info("getMyBadges completed successfully for userId={}", user.getId());
+            return result;
         } catch (Exception e) {
-            logger.error("Error fetching badges for student", e);
+            logger.error("getMyBadges failed: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -93,7 +128,15 @@ public class RewardsController {
     @GetMapping("/students/{studentId}/badges")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN', 'PSYCHOLOGIST')")
     public ResponseEntity<List<BadgeResponse>> getStudentBadges(@PathVariable Long studentId) {
-        return ResponseEntity.ok(rewardsService.getStudentBadges(studentId));
+        logger.info("getStudentBadges started for studentId={}", studentId);
+        try {
+            ResponseEntity<List<BadgeResponse>> result = ResponseEntity.ok(rewardsService.getStudentBadges(studentId));
+            logger.info("getStudentBadges completed successfully for studentId={}", studentId);
+            return result;
+        } catch (Exception e) {
+            logger.error("getStudentBadges failed for studentId={}: {}", studentId, e.getMessage(), e);
+            throw e;
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -103,7 +146,15 @@ public class RewardsController {
     @GetMapping("/achievements")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<AchievementResponse>> getAllAchievements() {
-        return ResponseEntity.ok(rewardsService.getAllAchievements());
+        logger.info("getAllAchievements started");
+        try {
+            ResponseEntity<List<AchievementResponse>> result = ResponseEntity.ok(rewardsService.getAllAchievements());
+            logger.info("getAllAchievements completed successfully");
+            return result;
+        } catch (Exception e) {
+            logger.error("getAllAchievements failed: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     @PostMapping("/achievements")
@@ -112,8 +163,16 @@ public class RewardsController {
             @RequestParam("title") String title,
             @RequestParam("description") String description,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(rewardsService.createAchievement(title, description, image));
+        logger.info("createAchievement started for title={}", title);
+        try {
+            ResponseEntity<AchievementResponse> result = ResponseEntity.status(HttpStatus.CREATED)
+                    .body(rewardsService.createAchievement(title, description, image));
+            logger.info("createAchievement completed successfully for title={}", title);
+            return result;
+        } catch (Exception e) {
+            logger.error("createAchievement failed for title={}: {}", title, e.getMessage(), e);
+            throw e;
+        }
     }
 
     @PutMapping("/achievements/{id}")
@@ -123,13 +182,29 @@ public class RewardsController {
             @RequestParam("title") String title,
             @RequestParam("description") String description,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.ok(rewardsService.updateAchievement(id, title, description, image));
+        logger.info("updateAchievement started for id={}", id);
+        try {
+            ResponseEntity<AchievementResponse> result = ResponseEntity.ok(rewardsService.updateAchievement(id, title, description, image));
+            logger.info("updateAchievement completed successfully for id={}", id);
+            return result;
+        } catch (Exception e) {
+            logger.error("updateAchievement failed for id={}: {}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 
     @DeleteMapping("/achievements/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> deleteAchievement(@PathVariable Long id) {
-        rewardsService.deleteAchievement(id);
-        return ResponseEntity.noContent().build();
+        logger.info("deleteAchievement started for id={}", id);
+        try {
+            rewardsService.deleteAchievement(id);
+            ResponseEntity<Void> result = ResponseEntity.noContent().build();
+            logger.info("deleteAchievement completed successfully for id={}", id);
+            return result;
+        } catch (Exception e) {
+            logger.error("deleteAchievement failed for id={}: {}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 }

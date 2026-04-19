@@ -5,6 +5,8 @@ import com.empathai.activities.dto.StudentGoalResponse;
 import com.empathai.activities.service.IActivityService;
 import com.empathai.user.dto.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,6 +17,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ActivityController {
 
+    private static final Logger logger = LoggerFactory.getLogger(ActivityController.class);
+
     private final IActivityService activityService;
 
     // ── Save a new goal ───────────────────────────────────────────────────────
@@ -23,8 +27,16 @@ public class ActivityController {
     @PostMapping("/goals")
     public ResponseEntity<ApiResponse<StudentGoalResponse>> saveGoal(
             @RequestBody StudentGoalRequest request) {
-        StudentGoalResponse response = activityService.saveGoal(request);
-        return ResponseEntity.ok(ApiResponse.success(response, "Goal saved successfully."));
+        logger.info("saveGoal started");
+        try {
+            StudentGoalResponse response = activityService.saveGoal(request);
+            ResponseEntity<ApiResponse<StudentGoalResponse>> result = ResponseEntity.ok(ApiResponse.success(response, "Goal saved successfully."));
+            logger.info("saveGoal completed successfully");
+            return result;
+        } catch (Exception e) {
+            logger.error("saveGoal failed: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     // ── Get all active goals for a student ────────────────────────────────────
@@ -33,8 +45,16 @@ public class ActivityController {
     @GetMapping("/goals/{studentId}")
     public ResponseEntity<ApiResponse<List<StudentGoalResponse>>> getGoals(
             @PathVariable Long studentId) {
-        List<StudentGoalResponse> goals = activityService.getGoals(studentId);
-        return ResponseEntity.ok(ApiResponse.success(goals, "Goals fetched successfully."));
+        logger.info("getGoals started for studentId={}", studentId);
+        try {
+            List<StudentGoalResponse> goals = activityService.getGoals(studentId);
+            ResponseEntity<ApiResponse<List<StudentGoalResponse>>> result = ResponseEntity.ok(ApiResponse.success(goals, "Goals fetched successfully."));
+            logger.info("getGoals completed successfully for studentId={}", studentId);
+            return result;
+        } catch (Exception e) {
+            logger.error("getGoals failed for studentId={}: {}", studentId, e.getMessage(), e);
+            throw e;
+        }
     }
 
     // ── Delete a specific goal ────────────────────────────────────────────────
@@ -44,7 +64,15 @@ public class ActivityController {
     public ResponseEntity<ApiResponse<Void>> deleteGoal(
             @PathVariable Long studentId,
             @PathVariable Long goalId) {
-        activityService.deleteGoal(studentId, goalId);
-        return ResponseEntity.ok(ApiResponse.success(null, "Goal deleted successfully."));
+        logger.info("deleteGoal started for studentId={}, goalId={}", studentId, goalId);
+        try {
+            activityService.deleteGoal(studentId, goalId);
+            ResponseEntity<ApiResponse<Void>> result = ResponseEntity.ok(ApiResponse.success(null, "Goal deleted successfully."));
+            logger.info("deleteGoal completed successfully for studentId={}, goalId={}", studentId, goalId);
+            return result;
+        } catch (Exception e) {
+            logger.error("deleteGoal failed for studentId={}, goalId={}: {}", studentId, goalId, e.getMessage(), e);
+            throw e;
+        }
     }
 }
