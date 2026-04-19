@@ -24,11 +24,11 @@ public class Student extends User {
     @Column(name = "section")
     private String section;
 
-    @Column(name = "phone_number")
-    private String phoneNumber;
-
     @Column(name = "parent_email")
     private String parentEmail;
+
+    @Column(name = "parent_phone")
+    private String parentPhone;
 
     @Column(name = "roll_no")
     private String rollNo;
@@ -39,8 +39,7 @@ public class Student extends User {
     @Column(name = "date_of_birth")
     private String dateOfBirth;
 
-    @Column(name = "age")
-    private Integer age;
+
 
     @Column(name = "parent_name")
     private String parentName;

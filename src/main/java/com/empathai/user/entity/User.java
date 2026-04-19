@@ -35,8 +35,7 @@ public class User extends BaseEntity implements UserDetails {
     @Column(unique = true, nullable = false)
     private String username;
 
-    @Column(name = "age")
-    private Integer age;
+
 
     @NotBlank
     @Email

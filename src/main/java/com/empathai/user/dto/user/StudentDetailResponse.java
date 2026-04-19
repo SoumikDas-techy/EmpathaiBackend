@@ -20,7 +20,7 @@ public class StudentDetailResponse {
     private String email;
     private String username;
     private String phoneNumber;
-    private String parentEmail;
+    private String parentPhone;
     private String parentName;
     private boolean active;
 

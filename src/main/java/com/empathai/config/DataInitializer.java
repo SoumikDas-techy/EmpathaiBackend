@@ -264,13 +264,13 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void seedStudent(String name, String email, String password, Long schoolId, String grade, String parentEmail) {
+    private void seedStudent(String name, String email, String password, Long schoolId, String grade, String parentPhone) {
         if (!userRepository.existsByEmail(email)) {
             Student s = new Student(email, passwordEncoder.encode(password), name);
             s.setUsername(email);
             s.setSchoolId(schoolId);
             s.setClassName(grade);
-            s.setParentEmail(parentEmail);
+            s.setParentPhone(parentPhone);
             userRepository.save(s);
             log.info("✅ Student created: {}", name);
         }
