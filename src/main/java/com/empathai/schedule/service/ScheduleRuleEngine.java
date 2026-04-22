@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
@@ -378,15 +379,20 @@ public class ScheduleRuleEngine {
         boolean alreadyWarned = false;
         int consecutiveCount = 0;
 
+
+        List<String> prevDays = IntStream.rangeClosed(1, 3)
+                .mapToObj(i -> weekOrder.get((todayIdx - i + 7) % 7))
+                .toList();
+
+        List<ScheduleTask> prevWeekTasks = taskRepository
+                .findByStudentIdAndDayOfWeekInAndDetectedType(
+                        request.getStudentId(), prevDays, "STUDY");
+
         for (int i = 1; i <= 3; i++) {
-            int prevIdx = (todayIdx - i + 7) % 7;
-            String prevDay = weekOrder.get(prevIdx);
-
-            List<ScheduleTask> prevTasks = taskRepository
-                    .findByStudentIdAndDayOfWeekAndDetectedType(
-                            request.getStudentId(), prevDay, "STUDY");
-
-            if (!prevTasks.isEmpty()) {
+            String prevDay = weekOrder.get((todayIdx - i + 7) % 7);
+            boolean hasStudy = prevWeekTasks.stream()
+                    .anyMatch(t -> t.getDayOfWeek().equals(prevDay));
+            if (hasStudy) {
                 consecutiveCount++;
             } else {
                 break;

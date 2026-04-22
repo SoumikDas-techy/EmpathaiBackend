@@ -18,4 +18,6 @@ public interface ScheduleTaskRepository extends JpaRepository<ScheduleTask, Long
     // tasks for a student on a day by detected type (used by rule engine)
     List<ScheduleTask> findByStudentIdAndDayOfWeekAndDetectedType(
             Long studentId, String dayOfWeek, String detectedType);
+
+    List<ScheduleTask> findByStudentIdAndDayOfWeekInAndDetectedType(Long studentId, List<String> prevDays, String study);
 }
